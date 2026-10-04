@@ -49,6 +49,7 @@ type AuthContextType = {
   /** Re-reads the signed-in member from the API, used after a profile change. */
   refreshProfile: () => Promise<User | null>;
   isLoading: boolean;
+  isReady: boolean;
 };
 
 const USER_KEY = "campuscare_user";
@@ -74,6 +75,18 @@ function subscribe(listener: () => void): () => void {
 
 function getServerSnapshot(): null {
   return null;
+}
+
+function subscribeToHydration(): () => void {
+  return () => {};
+}
+
+function getClientReadySnapshot(): boolean {
+  return true;
+}
+
+function getServerReadySnapshot(): boolean {
+  return false;
 }
 
 let cachedKey: string | null = null;
@@ -128,6 +141,11 @@ function toUser(account: LoginPayload["user"]): User {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const user = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const isReady = useSyncExternalStore(
+    subscribeToHydration,
+    getClientReadySnapshot,
+    getServerReadySnapshot,
+  );
   const [isPending, setIsPending] = useState(false);
 
   const login = useCallback(async (email: string, password: string): Promise<User> => {
@@ -189,8 +207,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextType>(
-    () => ({ user, login, logout, refreshProfile, isLoading: isPending }),
-    [user, login, logout, refreshProfile, isPending],
+    () => ({ user, login, logout, refreshProfile, isLoading: isPending, isReady }),
+    [user, login, logout, refreshProfile, isPending, isReady],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

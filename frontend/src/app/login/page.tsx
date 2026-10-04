@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -113,9 +112,6 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
-                <Link href="/forgot-password" className="text-xs text-lpu-primary hover:underline">
-                  Forgot password?
-                </Link>
               </div>
               <input
                 id="password"
@@ -131,6 +127,9 @@ export default function LoginPage() {
                   "border-surface-border bg-white text-gray-900 placeholder:text-gray-400",
                 )}
               />
+              <p className="mt-1.5 text-xs text-gray-500">
+                For password resets, contact your campus administrator.
+              </p>
             </div>
 
             {error && (

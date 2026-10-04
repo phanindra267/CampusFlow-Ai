@@ -25,20 +25,6 @@ func NewCampusHandler(db *postgres.CampusRepository) *CampusHandler {
 
 // ----------------------------------------------------------------- clubs
 
-func (h *CampusHandler) ListClubs(c *gin.Context) {
-	clubs, err := h.db.ListClubs(c.Request.Context(), c.Query("category"), c.Query("q"),
-		pageSize(c.Query("limit")), parsePositiveInt(c.Query("offset"), 0))
-	if err != nil {
-		writeRepoError(c, err, "CLUB_NOT_FOUND", "CLUB_LIST_FAILED")
-		return
-	}
-
-	response.Success(c, http.StatusOK, "Clubs retrieved", gin.H{
-		"clubs": clubs,
-		"count": len(clubs),
-	})
-}
-
 func (h *CampusHandler) GetClub(c *gin.Context) {
 	club, memberCount, err := h.db.GetClub(c.Request.Context(), c.Param("id"))
 	if err != nil {

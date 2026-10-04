@@ -296,7 +296,8 @@ function GroupsTab({ clubs, onChanged }: { clubs: Club[]; onChanged: () => void 
     setJoining(club.id);
     setError(null);
     try {
-      await api.joinClub(club.id);
+      if (club.is_member) await api.leaveClub(club.id);
+      else await api.joinClub(club.id);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not join that group.");
@@ -339,7 +340,13 @@ function GroupsTab({ clubs, onChanged }: { clubs: Club[]; onChanged: () => void 
                 disabled={joining === club.id}
                 className="rounded-lg border border-lpu-primary px-3 py-1.5 text-xs font-medium text-lpu-primary hover:bg-lpu-light disabled:opacity-50"
               >
-                {joining === club.id ? "Joining…" : "Join"}
+                {joining === club.id
+                  ? club.is_member
+                    ? "Leaving…"
+                    : "Joining…"
+                  : club.is_member
+                    ? "Leave"
+                    : "Join"}
               </button>
             </div>
           </div>

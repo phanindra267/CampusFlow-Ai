@@ -183,6 +183,7 @@ export type Club = {
   status: string;
   created_by: string;
   member_count?: number;
+  is_member?: boolean;
 };
 
 export type ClubMembership = {

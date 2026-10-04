@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isReady } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!user) router.replace("/login");
-  }, [user, router]);
+    if (isReady && !user) router.replace("/login");
+  }, [isReady, user, router]);
 
-  if (!user) return null;
+  if (!isReady || !user) return null;
 
   return (
     <div className="flex h-screen bg-surface-raised overflow-hidden">

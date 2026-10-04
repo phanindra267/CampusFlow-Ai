@@ -295,6 +295,20 @@ func (h *ContentHandler) EventCategories(c *gin.Context) {
 
 // ------------------------------------------------------------------- clubs
 
+func (h *ContentHandler) ListClubs(c *gin.Context) {
+	clubs, err := h.clubs.ListClubs(c.Request.Context(), middleware.UserID(c), c.Query("category"),
+		c.Query("q"), pageSize(c.Query("limit")), parsePositiveInt(c.Query("offset"), 0))
+	if err != nil {
+		writeRepoError(c, err, "CLUB_NOT_FOUND", "CLUB_LIST_FAILED")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Clubs retrieved", gin.H{
+		"clubs": clubs,
+		"count": len(clubs),
+	})
+}
+
 // CreateClub registers a club. New clubs start PENDING for verification: a club
 // page that anyone can create under any name is not something a campus wants.
 func (h *ContentHandler) CreateClub(c *gin.Context) {

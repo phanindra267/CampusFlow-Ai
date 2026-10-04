@@ -140,7 +140,7 @@ func registerCommunityRoutes(r *gin.RouterGroup, h *handlers) {
 func registerCampusRoutes(r *gin.RouterGroup, h *handlers) {
 	clubs := r.Group("/clubs")
 	{
-		clubs.GET("", h.campus.ListClubs)
+		clubs.GET("", h.content.ListClubs)
 		clubs.GET("/categories", h.content.ClubCategories)
 		clubs.GET("/:id", h.campus.GetClub)
 		clubs.POST("/:id/join", h.campus.JoinClub)

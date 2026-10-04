@@ -22,13 +22,13 @@ func NewClubRepository(db *pgxpool.Pool) *ClubRepository {
 	return &ClubRepository{dbBase: dbBase{db: db}}
 }
 
-// clubDetailColumns resolves follower count and, when memberID is supplied, whether the
-// caller follows the club. Passing an empty member identifier skips the
-// membership check, which is what unauthenticated reads need.
+// clubDetailColumns resolves member and follower counts and the caller's
+// membership and follow state.
 const clubDetailColumns = `c.id, c.name, c.slug, COALESCE(c.description, ''),
 	COALESCE(c.category, ''), COALESCE(c.verification_status, 'PENDING'),
 	COALESCE(c.status, 'ACTIVE'), COALESCE(c.logo_url, ''), COALESCE(c.contact_email, ''),
 	c.member_count, c.follower_count, c.created_by, c.created_at, c.updated_at,
+	EXISTS (SELECT 1 FROM club_memberships m WHERE m.club_id = c.id AND m.user_id = $1 AND m.status = 'ACTIVE') AS is_member,
 	EXISTS (SELECT 1 FROM club_follows f WHERE f.club_id = c.id AND f.user_id = $1) AS is_following`
 
 func scanClub(row pgx.Row) (*domain.Club, error) {
@@ -36,7 +36,7 @@ func scanClub(row pgx.Row) (*domain.Club, error) {
 	if err := row.Scan(&club.ID, &club.Name, &club.Slug, &club.Description,
 		&club.Category, &club.VerificationStatus, &club.Status, &club.LogoURL,
 		&club.ContactEmail, &club.MemberCount, &club.FollowerCount, &club.CreatedBy,
-		&club.CreatedAt, &club.UpdatedAt, &club.IsFollowing); err != nil {
+		&club.CreatedAt, &club.UpdatedAt, &club.IsMember, &club.IsFollowing); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}

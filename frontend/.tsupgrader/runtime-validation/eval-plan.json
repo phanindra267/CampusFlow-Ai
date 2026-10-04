@@ -1,0 +1,130 @@
+{
+  "generatedAt": "2026-10-04T14:47:00Z",
+  "generatedOnPlatform": "win32",
+  "projectType": "webapp",
+  "setup": [
+    {
+      "command": "npm",
+      "args": [
+        "ci"
+      ],
+      "timeoutSeconds": 600
+    }
+  ],
+  "assertions": [
+    {
+      "name": "frontend-lint",
+      "kind": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "lint"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "frontend-typecheck",
+      "kind": "process",
+      "command": "node",
+      "args": [
+        "node_modules/typescript/bin/tsc",
+        "--noEmit"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "frontend-production-build",
+      "kind": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 600
+    },
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": [
+        "test"
+      ],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "backend-tests-pass",
+      "kind": "process",
+      "command": "go",
+      "args": [
+        "test",
+        "./..."
+      ],
+      "cwd": "C:\\Users\\phani\\Downloads\\CampusCare AI",
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "api-readiness",
+      "kind": "process",
+      "command": "node",
+      "args": [
+        "-e",
+        "fetch('http://127.0.0.1:8082/api/v1/health/ready').then(response => process.exit(response.status === 200 ? 0 : 1)).catch(() => process.exit(1))"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 30
+    },
+    {
+      "name": "frontend-home-200",
+      "kind": "http-probe",
+      "startCommand": "npm",
+      "startArgs": [
+        "run",
+        "dev",
+        "--",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        "3001"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://127.0.0.1:8082/api/v1"
+      },
+      "url": "http://127.0.0.1:3001/",
+      "verificationMethod": "http-status",
+      "expected": "200",
+      "timeoutSeconds": 120
+    },
+    {
+      "name": "frontend-login-200",
+      "kind": "http-probe",
+      "startCommand": "npm",
+      "startArgs": [
+        "run",
+        "dev",
+        "--",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        "3001"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://127.0.0.1:8082/api/v1"
+      },
+      "url": "http://127.0.0.1:3001/login",
+      "verificationMethod": "http-status",
+      "expected": "200",
+      "timeoutSeconds": 120
+    }
+  ]
+}

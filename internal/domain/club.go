@@ -29,6 +29,7 @@ type Club struct {
 	ContactEmail  string `json:"contact_email,omitempty"`
 	MemberCount   int    `json:"member_count"`
 	FollowerCount int    `json:"follower_count"`
+	IsMember      bool   `json:"is_member"`
 	IsFollowing   bool   `json:"is_following"`
 }
 
