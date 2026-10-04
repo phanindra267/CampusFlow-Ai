@@ -1,91 +1,202 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { fetchAPI } from "@/lib/api";
 
-type User = {
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  APIError,
+  clearStoredTokens,
+  fetchAPI,
+  setSessionExpiredHandler,
+  setStoredTokens,
+} from "@/lib/api";
+
+export type User = {
   id: string;
-  name: string;
   email: string;
+  displayName: string;
   role: string;
-  program?: string;
-  department?: string;
+};
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  message?: string;
+  data: T;
+};
+
+type LoginPayload = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: {
+    id: string;
+    email: string;
+    display_name?: string;
+    role: string;
+  };
 };
 
 type AuthContextType = {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  /** Re-reads the signed-in member from the API, used after a profile change. */
+  refreshProfile: () => Promise<User | null>;
   isLoading: boolean;
 };
 
+const USER_KEY = "campuscare_user";
+const ACCESS_TOKEN_KEY = "campuscare_access_token";
+const REFRESH_TOKEN_KEY = "campuscare_refresh_token";
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const listeners = new Set<() => void>();
+
+function notify() {
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function getServerSnapshot(): null {
+  return null;
+}
+
+let cachedKey: string | null = null;
+let cachedUser: User | null = null;
+
+function readUser(): { key: string; user: User | null } {
+  if (typeof window === "undefined") return { key: "", user: null };
+
+  const access = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const refresh = window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  const raw = window.localStorage.getItem(USER_KEY);
+  const key = `${access ?? ""}::${refresh ?? ""}::${raw ?? ""}`;
+
+  if (!raw) return { key, user: null };
+
+  try {
+    return { key, user: JSON.parse(raw) as User };
+  } catch {
+    return { key, user: null };
+  }
+}
+
+function getSnapshot(): User | null {
+  const { key, user } = readUser();
+  if (key !== cachedKey) {
+    cachedKey = key;
+    cachedUser = user;
+  }
+  return cachedUser;
+}
+
+function persistSession(tokens: { access: string; refresh: string }, user: User) {
+  setStoredTokens(tokens.access, tokens.refresh);
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  notify();
+}
+
+function clearSession() {
+  clearStoredTokens();
+  window.localStorage.removeItem(USER_KEY);
+  notify();
+}
+
+function toUser(account: LoginPayload["user"]): User {
+  return {
+    id: account.id,
+    email: account.email,
+    displayName: account.display_name?.trim() || account.email.split("@")[0],
+    role: account.role,
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const user = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [isPending, setIsPending] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("campuscare_token");
-    const storedUser = localStorage.getItem("campuscare_user");
-    if (token && storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
+  const login = useCallback(async (email: string, password: string): Promise<User> => {
+    setIsPending(true);
     try {
-      // If demo accounts, simulate for presentation, otherwise hit real backend
-      if (password === "demo") {
-        await new Promise(r => setTimeout(r, 800));
-        let demoUser: User = { id: "student_1", name: "Rohan Sharma", email, role: "STUDENT", program: "B.Tech CSE" };
-        if (email.includes("faculty")) demoUser = { id: "fac_1", name: "Dr. Arun Sharma", email, role: "FACULTY", department: "School of CSE" };
-        if (email.includes("admin")) demoUser = { id: "admin_1", name: "Admin Setup", email, role: "ADMIN" };
-        
-        setUser(demoUser);
-        localStorage.setItem("campuscare_user", JSON.stringify(demoUser));
-        localStorage.setItem("campuscare_token", "demo-token");
-        return;
-      }
-
-      // Real API Call
-      const res = await fetchAPI("/auth/login", {
+      const res = await fetchAPI<ApiEnvelope<LoginPayload>>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      
-      const realUser: User = {
-        id: res.data.user.id,
-        name: res.data.user.email.split("@")[0], // Fallback name
-        email: res.data.user.email,
-        role: res.data.user.role,
-      };
 
-      setUser(realUser);
-      localStorage.setItem("campuscare_user", JSON.stringify(realUser));
-      localStorage.setItem("campuscare_token", res.data.token);
-    } catch (err: any) {
-      throw new Error(err.message || "Invalid credentials");
+      const payload = res.data;
+      if (!payload?.access_token || !payload?.refresh_token || !payload?.user?.id) {
+        throw new APIError(500, "Malformed login response from server");
+      }
+
+      const nextUser = toUser(payload.user);
+      persistSession({ access: payload.access_token, refresh: payload.refresh_token }, nextUser);
+      return nextUser;
     } finally {
-      setIsLoading(false);
+      setIsPending(false);
     }
-  };
+  }, []);
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("campuscare_token");
-    localStorage.removeItem("campuscare_user");
-  };
+  const logout = useCallback(() => {
+    clearSession();
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
-      {children}
-    </AuthContext.Provider>
+  const refreshProfile = useCallback(async (): Promise<User | null> => {
+    try {
+      const res = await fetchAPI<ApiEnvelope<{
+        id: string;
+        email: string;
+        display_name?: string;
+        role: string;
+      }>>("/auth/me");
+
+      const nextUser = toUser({
+        id: res.data.id,
+        email: res.data.email,
+        display_name: res.data.display_name,
+        role: res.data.role,
+      });
+      window.localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+      notify();
+      return nextUser;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // A failed token refresh in api.ts means the session is unrecoverable, so the
+  // cached profile is dropped here rather than left pointing at a dead token.
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      window.localStorage.removeItem(USER_KEY);
+      notify();
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
+
+  const value = useMemo<AuthContextType>(
+    () => ({ user, login, logout, refreshProfile, isLoading: isPending }),
+    [user, login, logout, refreshProfile, isPending],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) throw new Error("useAuth must be used within an AuthProvider");
   return context;

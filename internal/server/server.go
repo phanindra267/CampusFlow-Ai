@@ -2,12 +2,13 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	
+	"time"
 
 	"github.com/campuscare/api/internal/config"
-	"github.com/campuscare/api/internal/delivery/http/handler"
 	"github.com/campuscare/api/internal/delivery/http/middleware"
+	"github.com/campuscare/api/internal/logger"
 	"github.com/campuscare/api/internal/repository/postgres"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,80 +19,87 @@ type Server struct {
 	db         *pgxpool.Pool
 }
 
+// New builds the HTTP server and registers every API route.
 func New(cfg *config.Config, db *pgxpool.Pool) *Server {
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	router := gin.Default()
-	router.Use(gin.Recovery())
-	router.Use(middleware.AuditLog(db)) // Audit Logger
+	log := logger.New(cfg.Log.Level, cfg.Log.Format)
 
-	// CORS
-	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
+	router := gin.New()
+	router.Use(middleware.Logger(log))
+	router.Use(middleware.Recovery(log))
+	router.Use(cors(cfg))
+	router.Use(middleware.AuditLog(db))
 
-	// Dependency Injection
 	userRepo := postgres.NewUserRepository(db)
-	eventRepo := postgres.NewEventRepository(db)
 
-	authHandler := handler.NewAuthHandler(cfg.JWT.Secret, userRepo)
-	eventHandler := handler.NewEventHandler(eventRepo)
-	oauthHandler := handler.NewOAuthHandler(cfg.JWT.Secret, userRepo)
-	otpHandler := handler.NewOTPHandler()
-
-	// API Routing
-	api := router.Group("/api/v1")
-	{
-		api.GET("/health/live", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
-		
-		// Auth
-		api.POST("/auth/login", authHandler.Login)
-		api.POST("/auth/register", authHandler.Register)
-		api.GET("/auth/google", oauthHandler.GoogleLogin)
-		api.GET("/auth/google/callback", oauthHandler.GoogleCallback)
-		
-		// OTP Auth
-		api.POST("/auth/otp/request", otpHandler.RequestOTP)
-		api.POST("/auth/otp/verify", otpHandler.VerifyOTP)
-
-		// Protected
-		protected := api.Group("/")
-		protected.Use(middleware.RequireAuth(cfg.JWT.Secret))
-		{
-			campus := protected.Group("/campus")
-			campus.Use(middleware.RequireRole("STUDENT", "SUPER_ADMIN", "ADMIN"))
-			{
-				campus.POST("/events", eventHandler.CreateEvent)
-				campus.GET("/events", eventHandler.ListEvents)
-			}
-		}
-	}
+	registerRoutes(router, cfg, newHandlers(cfg, db, userRepo))
 
 	return &Server{
 		httpServer: &http.Server{
-			Addr:         ":" + cfg.Server.Port,
-			Handler:      router,
-			ReadTimeout:  cfg.Server.ReadTimeout,
-			WriteTimeout: cfg.Server.WriteTimeout,
+			Addr:              ":" + cfg.Server.Port,
+			Handler:           router,
+			ReadTimeout:       cfg.Server.ReadTimeout,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      cfg.Server.WriteTimeout,
+			IdleTimeout:       60 * time.Second,
 		},
 		db: db,
 	}
 }
 
-func (s *Server) Start() error {
-	return s.httpServer.ListenAndServe()
+func cors(cfg *config.Config) gin.HandlerFunc {
+	allowed := cfg.Server.CORSOrigins
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" && originAllowed(origin, allowed) {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Vary", "Origin")
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Authorization")
+		c.Writer.Header().Set("Access-Control-Max-Age", "600")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
 }
 
+func originAllowed(origin string, allowed []string) bool {
+	if len(allowed) == 0 {
+		return false
+	}
+	for _, candidate := range allowed {
+		if candidate == "*" || candidate == origin {
+			return true
+		}
+	}
+	return false
+}
+
+// Handler exposes the fully wired router so tests can drive the real route graph
+// in-process instead of binding a TCP port.
+func (s *Server) Handler() http.Handler {
+	return s.httpServer.Handler
+}
+
+func (s *Server) Start() error {
+	if err := s.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// Shutdown gracefully stops the server and releases the database pool.
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.db.Close()
+	if s.db != nil {
+		s.db.Close()
+	}
 	return s.httpServer.Shutdown(ctx)
 }

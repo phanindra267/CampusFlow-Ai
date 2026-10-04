@@ -5,21 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-const studentNav = [
+const memberNav = [
   { href: "/dashboard", label: "Home", icon: HomeIcon },
-  { href: "/academics", label: "Academics", icon: BookIcon },
+  { href: "/community", label: "Community", icon: UsersIcon },
   { href: "/discover", label: "Discover", icon: CompassIcon },
   { href: "/career", label: "Career", icon: BriefcaseIcon },
   { href: "/research", label: "Research", icon: FlaskIcon },
   { href: "/campus", label: "Campus", icon: BuildingIcon },
-  { href: "/ai", label: "AI Assistant", icon: SparkleIcon, accent: true },
-];
-
-const facultyNav = [
-  { href: "/dashboard", label: "Home", icon: HomeIcon },
-  { href: "/teaching", label: "Teaching", icon: BookIcon },
-  { href: "/research", label: "Research", icon: FlaskIcon },
-  { href: "/students", label: "Students", icon: UsersIcon },
   { href: "/ai", label: "AI Assistant", icon: SparkleIcon, accent: true },
 ];
 
@@ -41,9 +33,7 @@ export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = user?.role === "ADMIN" ? adminNav
-    : user?.role === "FACULTY" || user?.role === "RESEARCHER" ? facultyNav
-    : studentNav;
+  const navItems = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" ? adminNav : memberNav;
 
   return (
     <aside className={cn(
@@ -59,7 +49,7 @@ export function Sidebar({ className }: SidebarProps) {
         {!collapsed && (
           <div className="min-w-0">
             <p className="font-semibold text-gray-900 text-sm truncate">CampusCare AI</p>
-            <p className="text-xs text-gray-400 truncate">LPU Campus</p>
+            <p className="text-xs text-gray-400 truncate">Campus Community</p>
           </div>
         )}
         <button
@@ -79,8 +69,8 @@ export function Sidebar({ className }: SidebarProps) {
       {/* User pill */}
       {!collapsed && user && (
         <div className="mx-3 my-3 p-2.5 bg-surface-raised rounded-lg border border-surface-border">
-          <p className="text-xs font-semibold text-gray-800 truncate">{user.name}</p>
-          <p className="text-xs text-gray-400 truncate">{user.program || user.department}</p>
+          <p className="text-xs font-semibold text-gray-800 truncate">{user.displayName}</p>
+          <p className="text-xs text-gray-400 truncate">{user.email}</p>
           <span className="mt-1 inline-block text-xs font-medium text-lpu-primary bg-lpu-light px-2 py-0.5 rounded-full">
             {user.role}
           </span>
@@ -127,9 +117,9 @@ export function Sidebar({ className }: SidebarProps) {
           collapsed && "justify-center"
         )}>
           <div className="w-7 h-7 bg-gradient-to-br from-lpu-primary to-lpu-hover rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">{user?.name?.[0] ?? "?"}</span>
+            <span className="text-white text-xs font-bold">{user?.displayName?.[0] ?? "?"}</span>
           </div>
-          {!collapsed && <span className="truncate text-xs">{user?.name}</span>}
+          {!collapsed && <span className="truncate text-xs">{user?.displayName}</span>}
         </Link>
         <button
           onClick={logout}
@@ -157,7 +147,7 @@ export function TopBar() {
         className="flex items-center gap-2 text-sm text-gray-400 bg-surface-raised border border-surface-border rounded-lg px-3 py-1.5 hover:border-gray-300 transition-colors flex-1 max-w-sm"
       >
         <SearchIcon className="w-4 h-4 flex-shrink-0" />
-        <span className="truncate">Search LPU...</span>
+        <span className="truncate">Search campus…</span>
         <kbd className="ml-auto text-xs bg-white border border-surface-border rounded px-1.5 py-0.5 hidden sm:inline-flex items-center gap-1 flex-shrink-0">
           <span className="text-gray-400">⌘K</span>
         </kbd>
@@ -198,12 +188,12 @@ export function TopBar() {
 function CommandPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const suggestions = [
-    { label: "My Timetable", href: "/academics", icon: "📅" },
+    { label: "Community Discussions", href: "/community", icon: "💬" },
     { label: "Upcoming Events", href: "/discover", icon: "🎉" },
-    { label: "Find Internships", href: "/career", icon: "💼" },
-    { label: "Ask AI about Attendance", href: "/ai", icon: "✨" },
+    { label: "Find Opportunities", href: "/career", icon: "💼" },
+    { label: "Ask the AI Assistant", href: "/ai", icon: "✨" },
     { label: "Campus Services", href: "/campus", icon: "🏛️" },
-    { label: "Research Opportunities", href: "/research", icon: "🔬" },
+    { label: "Research & Groups", href: "/research", icon: "🔬" },
   ].filter(s => !query || s.label.toLowerCase().includes(query.toLowerCase()));
 
   return (
@@ -215,7 +205,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
             autoFocus
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search LPU — events, courses, opportunities, services..."
+            placeholder="Search campus — events, groups, opportunities, services..."
             className="flex-1 text-sm outline-none bg-transparent"
           />
           <kbd className="text-xs text-gray-400 border border-surface-border rounded px-1.5 py-0.5 flex-shrink-0">Esc</kbd>
@@ -234,7 +224,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
             </li>
           ))}
           {suggestions.length === 0 && (
-            <li className="px-4 py-6 text-center text-sm text-gray-400">No results for "{query}"</li>
+            <li className="px-4 py-6 text-center text-sm text-gray-400">No results for &ldquo;{query}&rdquo;</li>
           )}
         </ul>
       </div>
@@ -247,7 +237,7 @@ export function MobileNav() {
   const pathname = usePathname();
   const items = [
     { href: "/dashboard", label: "Home", icon: HomeIcon },
-    { href: "/academics", label: "Academics", icon: BookIcon },
+    { href: "/community", label: "Community", icon: UsersIcon },
     { href: "/ai", label: "AI", icon: SparkleIcon, accent: true },
     { href: "/discover", label: "Discover", icon: CompassIcon },
     { href: "/profile", label: "Profile", icon: UserIcon },
@@ -285,9 +275,6 @@ export function MobileNav() {
 // Icon components
 function HomeIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>;
-}
-function BookIcon({ className }: { className?: string }) {
-  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>;
 }
 function CompassIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10"/><polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88 16.24,7.76"/></svg>;

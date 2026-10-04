@@ -99,7 +99,7 @@ export function AIChatMessage({ role, content, citations, isStreaming }: AIChatM
           <div className="bg-ai-light border border-ai-accent/20 rounded-lg p-3 text-xs text-gray-700 animate-fade-in">
             <p className="font-medium text-ai-accent mb-1">Source Details</p>
             <p>{citations?.find(c => c.id === expandedCitation)?.source}</p>
-            <p className="text-gray-400 mt-1">LPU Knowledge Base — This response is grounded in verified campus data.</p>
+            <p className="text-gray-400 mt-1">CampusCare knowledge base — this response is grounded in verified campus data.</p>
           </div>
         )}
       </div>

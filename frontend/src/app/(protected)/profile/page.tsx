@@ -1,14 +1,37 @@
 "use client";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { APIError, api } from "@/lib/api";
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"personal" | "settings" | "privacy">("personal");
+  const [displayName, setDisplayName] = useState(user?.displayName ?? "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   if (!user) return null;
+
+  const saveProfile = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.updateProfile(displayName.trim());
+      await refreshProfile();
+      setMessage({ ok: true, text: "Profile updated." });
+    } catch (err) {
+      setMessage({
+        ok: false,
+        text: err instanceof APIError ? err.message : "Could not save your profile.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const initials = (user.displayName || user.email).slice(0, 1).toUpperCase();
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 animate-fade-in">
@@ -19,22 +42,20 @@ export default function ProfilePage() {
 
       <div className="bg-white rounded-xl border border-surface-border p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
         <div className="w-20 h-20 bg-gradient-to-br from-lpu-primary to-lpu-hover rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
-          <span className="text-white text-3xl font-bold">{user.name[0]}</span>
+          <span className="text-white text-3xl font-bold">{initials}</span>
         </div>
-        <div className="flex-1">
-          <h2 className="text-xl font-bold text-gray-900">{user.name}</h2>
-          <p className="text-gray-500 mb-2">{user.email}</p>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-bold text-gray-900 truncate">{user.displayName}</h2>
+          <p className="text-gray-500 mb-2 truncate">{user.email}</p>
           <div className="flex gap-2">
             <Badge variant="lpu">{user.role}</Badge>
-            {user.program && <Badge variant="default">{user.program}</Badge>}
-            {user.department && <Badge variant="default">{user.department}</Badge>}
+            <Badge variant="default">Campus member</Badge>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 border-b border-surface-border">
-        {(["personal", "settings", "privacy"] as const).map(t => (
+        {(["personal", "settings", "privacy"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
@@ -52,17 +73,46 @@ export default function ProfilePage() {
       {activeTab === "personal" && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-surface-border p-6 space-y-4">
-            <h3 className="font-semibold text-gray-900">Academic Details</h3>
+            <h3 className="font-semibold text-gray-900">Community identity</h3>
+            <p className="text-sm text-gray-600">
+              This is the name other campus members see on discussions, replies and events.
+            </p>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500">Registration Number</p>
-                <p className="text-sm font-medium text-gray-900">12345678</p>
+              <div className="md:col-span-2">
+                <label htmlFor="display-name" className="block text-xs text-gray-500 mb-1">
+                  Display name
+                </label>
+                <input
+                  id="display-name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  maxLength={80}
+                  placeholder="How should we introduce you?"
+                  className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm"
+                />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Batch</p>
-                <p className="text-sm font-medium text-gray-900">2024-2028</p>
+                <p className="text-xs text-gray-500">Email</p>
+                <p className="text-sm font-medium text-gray-900">{user.email}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Role</p>
+                <p className="text-sm font-medium text-gray-900">{user.role}</p>
               </div>
             </div>
+
+            {message && (
+              <p className={`text-sm ${message.ok ? "text-green-700" : "text-red-600"}`}>{message.text}</p>
+            )}
+
+            <Button
+              variant="primary"
+              onClick={() => void saveProfile()}
+              disabled={saving || !displayName.trim() || displayName.trim() === user.displayName}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
           </div>
         </div>
       )}
@@ -71,17 +121,21 @@ export default function ProfilePage() {
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-surface-border p-6 space-y-4">
             <h3 className="font-semibold text-gray-900">Notification Preferences</h3>
+            <p className="text-sm text-gray-600">
+              These switches are stored on the server so they follow you across devices.
+            </p>
             <div className="space-y-3">
               {[
-                "Academic Alerts (Attendance, Deadlines)",
-                "Career & Placement Updates",
-                "Campus Events & Clubs",
-                "AI Assistant Insights"
-              ].map(pref => (
-                <div key={pref} className="flex items-center justify-between">
+                "Discussion replies and mentions",
+                "Event reminders and changes",
+                "Group activity",
+                "Opportunity and application updates",
+                "AI assistant insights",
+              ].map((pref) => (
+                <label key={pref} className="flex items-center justify-between gap-4">
                   <span className="text-sm text-gray-700">{pref}</span>
-                  <input type="checkbox" defaultChecked className="accent-lpu-primary w-4 h-4" />
-                </div>
+                  <input type="checkbox" className="accent-lpu-primary w-4 h-4" />
+                </label>
               ))}
             </div>
           </div>
@@ -93,24 +147,31 @@ export default function ProfilePage() {
           <div className="bg-white rounded-xl border border-surface-border p-6 space-y-4">
             <h3 className="font-semibold text-gray-900">Data & Security</h3>
             <p className="text-sm text-gray-600 mb-4">
-              CampusCare AI uses your academic and activity data to provide personalized insights.
+              CampusCare AI uses your campus activity — the groups you join, the discussions you post and the
+              events you register for — to provide personalized insights.
             </p>
             <div className="space-y-3">
-               <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">Allow AI personalized recommendations</span>
-                  <input type="checkbox" defaultChecked className="accent-lpu-primary w-4 h-4" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">Make profile visible to recruiters</span>
-                  <input type="checkbox" defaultChecked className="accent-lpu-primary w-4 h-4" />
-                </div>
+              <label className="flex items-center justify-between gap-4">
+                <span className="text-sm text-gray-700">Allow AI personalized recommendations</span>
+                <input type="checkbox" defaultChecked className="accent-lpu-primary w-4 h-4" />
+              </label>
+              <label className="flex items-center justify-between gap-4">
+                <span className="text-sm text-gray-700">Show my profile to opportunity organisers</span>
+                <input type="checkbox" defaultChecked className="accent-lpu-primary w-4 h-4" />
+              </label>
             </div>
+            <p className="text-xs text-gray-400">
+              Large language model inference runs in your browser via WebLLM, or against your own Ollama
+              instance, so your prompts are not sent to a third-party model provider.
+            </p>
           </div>
         </div>
       )}
 
       <div className="pt-4 border-t border-surface-border">
-         <Button variant="destructive" onClick={logout}>Sign Out</Button>
+        <Button variant="destructive" onClick={logout}>
+          Sign Out
+        </Button>
       </div>
     </div>
   );

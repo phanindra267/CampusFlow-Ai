@@ -22,8 +22,15 @@ export function formatRelativeDate(date: Date): string {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-export function getAttendanceStatus(percentage: number): "safe" | "warning" | "danger" {
-  if (percentage >= 80) return "safe";
-  if (percentage >= 75) return "warning";
-  return "danger";
+export function formatDateTime(date: Date): string {
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export function isPast(date: Date): boolean {
+  return date.getTime() < Date.now();
 }

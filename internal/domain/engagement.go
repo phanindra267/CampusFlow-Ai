@@ -5,7 +5,7 @@ import "time"
 type WaitlistEntry struct {
 	ID         string     `json:"id"`
 	EventID    string     `json:"event_id"`
-	StudentID  string     `json:"student_id"`
+	MemberID   string     `json:"member_id"`
 	Status     string     `json:"status"` // WAITING, PROMOTED, EXPIRED
 	JoinedAt   time.Time  `json:"joined_at"`
 	PromotedAt *time.Time `json:"promoted_at,omitempty"`
@@ -33,7 +33,7 @@ type CheckInSession struct {
 type AttendanceRecord struct {
 	ID             string    `json:"id"`
 	EventSessionID string    `json:"event_session_id"`
-	StudentID      string    `json:"student_id"`
+	MemberID       string    `json:"member_id"`
 	CheckInMethod  string    `json:"check_in_method"`
 	CheckedInAt    time.Time `json:"checked_in_at"`
 	Status         string    `json:"status"`
@@ -43,7 +43,7 @@ type Feedback struct {
 	ID           string    `json:"id"`
 	ActivityType string    `json:"activity_type" binding:"required"`
 	ActivityID   string    `json:"activity_id" binding:"required"`
-	StudentID    string    `json:"student_id"`
+	MemberID     string    `json:"member_id"`
 	Rating       int       `json:"rating" binding:"required,min=1,max=5"`
 	Comment      string    `json:"comment"`
 	Status       string    `json:"status"`
@@ -52,7 +52,7 @@ type Feedback struct {
 
 type EngagementActivity struct {
 	ID           string    `json:"id"`
-	StudentID    string    `json:"student_id"`
+	MemberID     string    `json:"member_id"`
 	ActivityType string    `json:"activity_type"`
 	ActivityID   string    `json:"activity_id"`
 	EventType    string    `json:"event_type"`

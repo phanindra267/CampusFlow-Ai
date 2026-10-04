@@ -1,0 +1,14 @@
+-- Reverses 000038_p1_profile_people.
+
+DROP TABLE IF EXISTS people;
+DROP TABLE IF EXISTS user_research_interests;
+
+ALTER TABLE users DROP COLUMN IF EXISTS open_to_opportunities;
+ALTER TABLE users DROP COLUMN IF EXISTS career_interests;
+ALTER TABLE users DROP COLUMN IF EXISTS avatar_url;
+ALTER TABLE users DROP COLUMN IF EXISTS bio;
+ALTER TABLE users DROP COLUMN IF EXISTS headline;
+ALTER TABLE users DROP COLUMN IF EXISTS year_of_study;
+ALTER TABLE users DROP COLUMN IF EXISTS branch;
+ALTER TABLE users DROP COLUMN IF EXISTS program;
+ALTER TABLE users DROP COLUMN IF EXISTS identifier;
