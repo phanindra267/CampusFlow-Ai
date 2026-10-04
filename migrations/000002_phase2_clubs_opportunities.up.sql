@@ -1,0 +1,64 @@
+
+CREATE TABLE IF NOT EXISTS clubs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    category VARCHAR(100),
+    verification_status VARCHAR(50) DEFAULT 'PENDING',
+    status VARCHAR(50) DEFAULT 'ACTIVE',
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS club_memberships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    club_id UUID NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL DEFAULT 'MEMBER',
+    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(club_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS club_announcements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    club_id UUID NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES users(id),
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    status VARCHAR(50) DEFAULT 'PUBLISHED',
+    published_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE events ADD COLUMN IF NOT EXISTS club_id UUID REFERENCES clubs(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS opportunities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    organizer_id UUID NOT NULL REFERENCES users(id),
+    club_id UUID REFERENCES clubs(id) ON DELETE SET NULL,
+    start_date TIMESTAMP WITH TIME ZONE,
+    end_date TIMESTAMP WITH TIME ZONE,
+    registration_deadline TIMESTAMP WITH TIME ZONE,
+    location VARCHAR(255),
+    delivery_mode VARCHAR(50),
+    capacity INT,
+    status VARCHAR(50) NOT NULL DEFAULT 'DRAFT',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS saved_opportunities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, opportunity_id)
+);

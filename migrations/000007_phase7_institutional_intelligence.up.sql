@@ -1,0 +1,68 @@
+
+CREATE TABLE IF NOT EXISTS graph_nodes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_type VARCHAR(50) NOT NULL, -- USER, CLUB, EVENT, OPPORTUNITY, RESOURCE, SKILL, POLICY
+    entity_id UUID NOT NULL,
+    label VARCHAR(255) NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(entity_type, entity_id)
+);
+
+CREATE TABLE IF NOT EXISTS graph_edges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_node_id UUID NOT NULL REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    target_node_id UUID NOT NULL REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    relationship_type VARCHAR(100) NOT NULL, -- INTERESTED_IN, REGISTERED_FOR, LOCATED_AT, PREREQUISITE_OF, REQUIRES_SKILL
+    weight FLOAT DEFAULT 1.0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_node_id, target_node_id, relationship_type)
+);
+
+CREATE TABLE IF NOT EXISTS campus_resources (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    resource_type VARCHAR(100) NOT NULL, -- LAB, ROOM, EQUIPMENT, VENUE
+    capacity INT,
+    status VARCHAR(50) DEFAULT 'AVAILABLE',
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS resource_reservations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    resource_id UUID NOT NULL REFERENCES campus_resources(id) ON DELETE CASCADE,
+    reserved_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    event_id UUID REFERENCES events(id) ON DELETE SET NULL,
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(50) DEFAULT 'CONFIRMED', -- PENDING, CONFIRMED, CANCELLED
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS skills (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) UNIQUE NOT NULL,
+    category VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_skills (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    proficiency_level VARCHAR(50) DEFAULT 'BEGINNER', -- BEGINNER, INTERMEDIATE, ADVANCED
+    verified BOOLEAN DEFAULT FALSE,
+    PRIMARY KEY(user_id, skill_id)
+);
+
+CREATE TABLE IF NOT EXISTS institutional_analytics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    metric_name VARCHAR(100) NOT NULL,
+    metric_value FLOAT NOT NULL,
+    dimensions JSONB,
+    period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
