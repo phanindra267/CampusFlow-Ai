@@ -195,7 +195,10 @@ func (r *CampusRepository) IsClubMember(ctx context.Context, clubID, userID stri
 // --------------------------------------------------------- opportunities
 
 const opportunityColumns = `o.id, o.title, o.description, o.type, o.category,
-	o.organizer_id, o.club_id, o.start_date, o.end_date, o.registration_deadline,
+	o.organizer_id, o.club_id,
+	COALESCE(o.start_date, '0001-01-01 00:00:00+00'::timestamptz),
+	COALESCE(o.end_date, '0001-01-01 00:00:00+00'::timestamptz),
+	COALESCE(o.registration_deadline, '0001-01-01 00:00:00+00'::timestamptz),
 	COALESCE(o.location, ''), COALESCE(o.delivery_mode, ''), COALESCE(o.capacity, 0),
 	o.status, o.created_at, o.updated_at`
 

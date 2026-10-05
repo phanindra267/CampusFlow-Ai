@@ -1,0 +1,18 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#g)"/>
+  <rect x="40" y="40" width="720" height="420" rx="14" fill="#0f172a" stroke="#475569" stroke-dasharray="8 6"/>
+  <rect x="330" y="188" width="140" height="112" rx="12" fill="#1e293b" stroke="#F07C00" stroke-width="2"/>
+  <circle cx="372" cy="222" r="13" fill="#F07C00"/>
+  <path d="M345 288 L398 245 L432 272 L466 240 L470 288 Z" fill="#6366F1" opacity="0.85"/>
+  <text x="400" y="128" text-anchor="middle" font-size="26" font-weight="700" fill="#f1f5f9">Operations</text>
+  <text x="400" y="156" text-anchor="middle" font-size="14" fill="#94a3b8">/admin/operations</text>
+  <text x="400" y="336" text-anchor="middle" font-size="15" fill="#cbd5e1">Service request queue</text>
+  <rect x="240" y="366" width="320" height="42" rx="21" fill="#F07C00"/>
+  <text x="400" y="393" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Screenshot placeholder</text>
+  <text x="400" y="438" text-anchor="middle" font-size="12" fill="#64748b">Replace with a real capture - see docs/SCREENSHOTS.md</text>
+</svg>

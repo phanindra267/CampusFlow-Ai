@@ -129,7 +129,11 @@ func (r *ClubRepository) GetClub(ctx context.Context, id, userID string) (*domai
 	}
 	const query = `SELECT ` + clubDetailColumns + ` FROM clubs c WHERE c.id = $2`
 
-	club, err := scanClub(r.db.QueryRow(ctx, query, userID, id))
+	var memberID any = userID
+	if userID == "" {
+		memberID = nil
+	}
+	club, err := scanClub(r.db.QueryRow(ctx, query, memberID, id))
 	if err != nil {
 		return nil, fmt.Errorf("get club: %w", err)
 	}
@@ -165,6 +169,52 @@ func (r *ClubRepository) ListClubs(ctx context.Context, userID, category, search
 		out = append(out, *club)
 	}
 	return out, rows.Err()
+}
+
+func (r *ClubRepository) ListPendingVerification(ctx context.Context, limit, offset int) ([]domain.Club, error) {
+	if err := r.ready(); err != nil {
+		return nil, err
+	}
+	const query = `SELECT ` + clubDetailColumns + `
+		FROM clubs c
+		WHERE COALESCE(c.status, 'ACTIVE') = 'ACTIVE'
+			AND COALESCE(c.verification_status, 'PENDING') = 'PENDING'
+		ORDER BY c.created_at ASC
+		LIMIT $2 OFFSET $3`
+
+	rows, err := r.db.Query(ctx, query, nil, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list clubs pending verification: %w", err)
+	}
+	defer rows.Close()
+
+	clubs := make([]domain.Club, 0, limit)
+	for rows.Next() {
+		club, err := scanClub(rows)
+		if err != nil {
+			return nil, err
+		}
+		clubs = append(clubs, *club)
+	}
+	return clubs, rows.Err()
+}
+
+func (r *ClubRepository) SetVerificationStatus(ctx context.Context, id, status string) (*domain.Club, error) {
+	if err := r.ready(); err != nil {
+		return nil, err
+	}
+	const query = `UPDATE clubs SET verification_status = $2, updated_at = now()
+		WHERE id = $1 AND COALESCE(verification_status, 'PENDING') = 'PENDING'
+		RETURNING id`
+
+	var updated string
+	if err := r.db.QueryRow(ctx, query, id, status).Scan(&updated); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("update club verification: %w", err)
+	}
+	return r.GetClub(ctx, id, "")
 }
 
 // ListMemberClubs is the member's own club list, resolved in one query instead

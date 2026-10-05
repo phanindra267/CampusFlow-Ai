@@ -31,9 +31,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-surface-raised flex">
       {/* Left — brand panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gray-900 flex-col justify-between p-12 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-gray-950 via-gray-900 to-indigo-950 flex-col justify-between p-12 relative overflow-hidden">
         <div
-          className="absolute inset-0 opacity-10"
+          className="login-glow absolute -inset-[10%] opacity-20"
           style={{
             backgroundImage:
               "radial-gradient(circle at 20% 50%, #F07C00 0%, transparent 50%), radial-gradient(circle at 80% 20%, #6366F1 0%, transparent 40%)",
@@ -41,7 +41,7 @@ export default function LoginPage() {
         />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 bg-lpu-primary rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-lpu-primary to-lpu-hover rounded-xl flex items-center justify-center shadow-lg shadow-orange-950/30">
               <span className="text-white font-bold text-lg">C</span>
             </div>
             <div>
@@ -65,8 +65,8 @@ export default function LoginPage() {
             { icon: "💼", text: "Opportunities matched to your interests" },
             { icon: "🏛️", text: "Bookable campus services" },
           ].map((f, i) => (
-            <div key={i} className="flex items-center gap-3 text-gray-300">
-              <span className="text-xl">{f.icon}</span>
+            <div key={i} className="login-feature group flex items-center gap-3 text-gray-300 transition-transform duration-200 hover:translate-x-1">
+              <span className="text-xl transition-transform duration-200 group-hover:scale-110">{f.icon}</span>
               <span className="text-sm">{f.text}</span>
             </div>
           ))}

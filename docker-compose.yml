@@ -4,7 +4,9 @@ services:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      # Matches DB_PASSWORD in .env.example. An existing volume keeps its own
+      # password, so change this only alongside that volume.
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: campuscare
     ports:
       - "5432:5432"
@@ -23,19 +25,28 @@ services:
       - DB_PASSWORD=postgrespassword
       - DB_NAME=campuscare
       - DB_SSLMODE=disable
-      - JWT_SECRET=production-secret-replace-me
+      - JWT_SECRET=dev-secret-change-me-please-32-chars-minimum
+      # Service name and container port inside the Compose network; the API
+      # reaches Weaviate directly rather than through the published host port.
+      - WEAVIATE_HOST=weaviate:8080
+      - WEAVIATE_SCHEME=http
     depends_on:
       - db
+      - weaviate
 
   weaviate:
     image: semitechnologies/weaviate:1.24.1
     ports:
+      # Published as 8081 because 8080 is the API's own host port.
       - "8081:8080"
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       DEFAULT_VECTORIZER_MODULE: 'none'
+    volumes:
+      - weaviate_data:/var/lib/weaviate
 
 volumes:
   postgres_data:
+  weaviate_data:

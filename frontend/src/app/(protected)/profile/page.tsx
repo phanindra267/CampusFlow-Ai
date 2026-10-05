@@ -161,8 +161,9 @@ export default function ProfilePage() {
               </label>
             </div>
             <p className="text-xs text-gray-400">
-              Large language model inference runs in your browser via WebLLM, or against your own Ollama
-              instance, so your prompts are not sent to a third-party model provider.
+              Generative answers are produced in your browser using WebLLM on WebGPU, so your
+              prompts are not sent to a third-party model provider. Searching campus records does
+              query this app&apos;s own API.
             </p>
           </div>
         </div>

@@ -129,6 +129,34 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, 
 	)
 }
 
+func (r *UserRepository) ListUsers(ctx context.Context, limit, offset int) ([]domain.User, error) {
+	if err := r.ready(); err != nil {
+		return nil, err
+	}
+
+	const query = `SELECT id, email, display_name, role, status, created_at, updated_at
+		FROM users
+		ORDER BY created_at DESC, email ASC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := r.db.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]domain.User, 0, limit)
+	for rows.Next() {
+		var user domain.User
+		if err := rows.Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role,
+			&user.Status, &user.CreatedAt, &user.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		users = append(users, user)
+	}
+	return users, rows.Err()
+}
+
 // UpdateDisplayName changes how the member is shown across the community.
 func (r *UserRepository) UpdateDisplayName(ctx context.Context, id, displayName string) error {
 	if err := r.ready(); err != nil {

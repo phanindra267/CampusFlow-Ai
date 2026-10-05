@@ -1,24 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  disposeProvider,
-  getProvider,
+  dispose,
+  detectCapabilities,
+  generate,
+  getLLMSettings,
+  getLoadedModel,
+  initialize,
+  interrupt,
+  onLoadProgress,
+  type CapabilityReport,
   type ChatMessage,
   type CompletionOptions,
-  type LLMProvider,
   type LLMStatus,
   type LoadProgress,
 } from "@/lib/llm";
 
 export type UseLLMResult = {
   status: LLMStatus;
-  providerName: string | null;
+  /** The loaded model id, or null while nothing is loaded. */
   model: string | null;
   progress: LoadProgress | null;
   error: string | null;
   isStreaming: boolean;
-  /** Load (or reuse) the runtime. Resolves to true when ready. */
+  /** What this browser can do, computed without loading any weights. */
+  capabilities: CapabilityReport;
+  /** Load (or reuse) the model. Resolves to true when ready. */
   initialize: () => Promise<boolean>;
   /** Stream a completion, invoking onDelta for each token. */
   generate: (
@@ -33,19 +41,51 @@ export type UseLLMResult = {
 function describe(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
-  return "The language model failed to respond.";
+  return "The on-device model failed to respond.";
+}
+
+/**
+ * Capabilities are a property of the environment, not of React state. Reading
+ * them through an external store keeps them out of an effect — no cascading
+ * render, and no hydration mismatch, because the server snapshot is always the
+ * "checking" placeholder.
+ */
+const CHECKING_CAPABILITIES: CapabilityReport = {
+  hasWebGPU: false,
+  hasWorkerSupport: false,
+  canGenerate: false,
+  reason: "Checking browser capabilities…",
+};
+
+let capabilitySnapshot: CapabilityReport | null = null;
+
+function readCapabilities(): CapabilityReport {
+  capabilitySnapshot ??= detectCapabilities();
+  return capabilitySnapshot;
+}
+
+function subscribeToCapabilities(onChange: () => void): () => void {
+  window.addEventListener("webgpuadapterchange", onChange);
+  return () => window.removeEventListener("webgpuadapterchange", onChange);
+}
+
+function serverCapabilities(): CapabilityReport {
+  return CHECKING_CAPABILITIES;
 }
 
 export function useLLM(): UseLLMResult {
+  const capabilities = useSyncExternalStore(
+    subscribeToCapabilities,
+    readCapabilities,
+    serverCapabilities,
+  );
+
   const [status, setStatus] = useState<LLMStatus>("idle");
-  const [providerName, setProviderName] = useState<string | null>(null);
-  const [model, setModel] = useState<string | null>(null);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
-  const providerRef = useRef<LLMProvider | null>(null);
-  const abortRef = useRef(false);
+  const requestIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -55,31 +95,36 @@ export function useLLM(): UseLLMResult {
     };
   }, []);
 
-  const initialize = useCallback(async (): Promise<boolean> => {
-    if (providerRef.current?.isReady()) return true;
+  const initializeEngine = useCallback(async (): Promise<boolean> => {
+    // The engine is shared process-wide; a warm load resolves immediately.
+    const loaded = getLoadedModel();
+    if (loaded) {
+      setStatus("ready");
+      return true;
+    }
 
     setStatus("loading");
     setError(null);
-    setProgress({ progress: null, text: "Starting the language model runtime…" });
+    setProgress({ progress: null, text: "Starting the on-device model runtime…" });
+
+    const unsubscribe = onLoadProgress((text, value) => {
+      if (mountedRef.current) setProgress({ text, progress: value });
+    });
 
     try {
-      const provider = await getProvider();
-      providerRef.current = provider;
-      setProviderName(provider.name);
-      setModel(provider.model);
-
-      await provider.load((update) => {
-        if (mountedRef.current) setProgress(update);
-      });
+      const settings = getLLMSettings();
+      const loadedModel = await initialize(settings);
 
       if (!mountedRef.current) return false;
 
+      unsubscribe();
       setProgress(null);
       setStatus("ready");
-      return true;
+      return loadedModel !== null;
     } catch (cause) {
       if (!mountedRef.current) return false;
-      providerRef.current = null;
+
+      unsubscribe();
       setStatus("error");
       setProgress(null);
       setError(describe(cause));
@@ -87,61 +132,69 @@ export function useLLM(): UseLLMResult {
     }
   }, []);
 
-  const generate = useCallback(
+  const runGenerate = useCallback(
     async (
       messages: ChatMessage[],
       onDelta: (delta: string) => void,
       options?: CompletionOptions,
     ): Promise<string> => {
-      const provider = providerRef.current;
-      if (!provider?.isReady()) {
-        throw new Error("The language model is not ready yet.");
+      if (!getLoadedModel()) {
+        throw new Error("The on-device model is not loaded yet.");
       }
 
-      abortRef.current = false;
       setIsStreaming(true);
       setError(null);
 
-      let full = "";
+      const { requestId, promise } = generate(
+        messages,
+        {
+          onDelta,
+          onDone: () => undefined,
+          onCancelled: () => undefined,
+          onError: (message) => {
+            if (mountedRef.current) setError(message);
+          },
+        },
+        { ...getLLMSettings(), ...options },
+      );
+
+      requestIdRef.current = requestId;
+
       try {
-        for await (const delta of provider.stream(messages, options)) {
-          if (abortRef.current) break;
-          full += delta;
-          onDelta(delta);
-        }
-      } catch (cause) {
-        if (mountedRef.current) setError(describe(cause));
-        throw cause;
+        return await promise;
       } finally {
+        requestIdRef.current = null;
         if (mountedRef.current) setIsStreaming(false);
       }
-
-      return full;
     },
     [],
   );
 
   const stop = useCallback(() => {
-    abortRef.current = true;
+    if (requestIdRef.current) {
+      interrupt(requestIdRef.current);
+    }
     setIsStreaming(false);
   }, []);
 
   useEffect(() => {
     return () => {
-      abortRef.current = true;
-      void disposeProvider();
+      void dispose();
     };
   }, []);
 
-  return {
-    status,
-    providerName,
-    model,
-    progress,
-    error,
-    isStreaming,
-    initialize,
-    generate,
-    stop,
-  };
+  return useMemo(
+    () => ({
+      status,
+      model: getLoadedModel(),
+      progress,
+      error,
+      isStreaming,
+      capabilities,
+      initialize: initializeEngine,
+      generate: runGenerate,
+      stop,
+    }),
+    [capabilities, error, initializeEngine, isStreaming, progress, runGenerate, status, stop],
+  );
 }

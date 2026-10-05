@@ -37,7 +37,7 @@ export function Sidebar({ className }: SidebarProps) {
 
   return (
     <aside className={cn(
-      "flex flex-col bg-white border-r border-surface-border transition-all duration-200",
+      "flex flex-col bg-white/95 border-r border-surface-border shadow-[2px_0_16px_rgba(16,24,40,0.025)] transition-[width,box-shadow] duration-300 ease-out",
       collapsed ? "w-16" : "w-60",
       className
     )}>
@@ -86,7 +86,7 @@ export function Sidebar({ className }: SidebarProps) {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100 group",
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
                 active
                   ? accent
                     ? "bg-ai-light text-ai-accent"
@@ -140,7 +140,7 @@ export function TopBar() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
-    <header className="h-14 bg-white border-b border-surface-border flex items-center gap-4 px-4 flex-shrink-0 sticky top-0 z-10">
+    <header className="h-14 bg-white/90 backdrop-blur-md border-b border-surface-border shadow-[0_2px_12px_rgba(16,24,40,0.025)] flex items-center gap-4 px-4 flex-shrink-0 sticky top-0 z-10">
       {/* Search */}
       <button
         onClick={() => setSearchOpen(true)}
@@ -162,7 +162,7 @@ export function TopBar() {
         {/* AI Button */}
         <Link
           href="/ai"
-          className="flex items-center gap-1.5 text-sm font-medium text-ai-accent bg-ai-light hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+          className="flex items-center gap-1.5 text-sm font-medium text-ai-accent bg-ai-light hover:bg-indigo-100 hover:shadow-sm hover:-translate-y-0.5 px-3 py-1.5 rounded-lg transition-all duration-200"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l2.4 7.2H22l-6.2 4.5 2.4 7.2L12 17l-6.2 3.9 2.4-7.2L2 9.2h7.6L12 2z" />
@@ -171,13 +171,13 @@ export function TopBar() {
         </Link>
 
         {/* Notifications */}
-        <Link href="/notifications" className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-surface-raised rounded-lg transition-colors">
+        <Link href="/notifications" className="relative p-2 text-gray-500 hover:text-lpu-primary hover:bg-lpu-light rounded-lg transition-all duration-200 hover:-translate-y-0.5">
           <BellIcon className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-lpu-primary rounded-full ring-2 ring-white" />
         </Link>
 
         {/* Profile */}
-        <Link href="/profile" className="w-8 h-8 bg-gradient-to-br from-lpu-primary to-lpu-hover rounded-full flex items-center justify-center flex-shrink-0">
+        <Link href="/profile" className="w-8 h-8 bg-gradient-to-br from-lpu-primary to-lpu-hover rounded-full flex items-center justify-center flex-shrink-0 transition-transform duration-200 hover:scale-105">
           <span className="text-white text-xs font-bold">R</span>
         </Link>
       </div>
@@ -197,7 +197,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
   ].filter(s => !query || s.label.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-gray-950/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4 animate-fade-in" onClick={onClose}>
       <div className="w-full max-w-lg bg-white rounded-xl shadow-modal border border-surface-border overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-border">
           <SearchIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -216,7 +216,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
               <Link
                 href={item.href}
                 onClick={onClose}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-raised transition-colors"
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-lpu-light/60 hover:pl-5 transition-all duration-200"
               >
                 <span className="text-lg flex-shrink-0">{item.icon}</span>
                 <span className="text-sm text-gray-800">{item.label}</span>
@@ -234,17 +234,22 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
 
 // Mobile bottom nav
 export function MobileNav() {
+  const { user } = useAuth();
   const pathname = usePathname();
-  const items = [
+  const memberItems = [
     { href: "/dashboard", label: "Home", icon: HomeIcon },
     { href: "/community", label: "Community", icon: UsersIcon },
     { href: "/ai", label: "AI", icon: SparkleIcon, accent: true },
     { href: "/discover", label: "Discover", icon: CompassIcon },
     { href: "/profile", label: "Profile", icon: UserIcon },
   ];
+  const items =
+    user?.role === "ADMIN" || user?.role === "SUPER_ADMIN"
+      ? adminNav
+      : memberItems;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-surface-border flex lg:hidden z-20">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-surface-border flex overflow-x-auto lg:hidden z-20">
       {items.map(({ href, label, icon: Icon, accent }) => {
         const active = pathname === href;
         return (
@@ -252,7 +257,7 @@ export function MobileNav() {
             key={href}
             href={href}
             className={cn(
-              "flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs transition-colors",
+              "flex-1 min-w-[64px] flex flex-col items-center justify-center py-2 gap-0.5 text-xs transition-colors",
               active
                 ? accent ? "text-ai-accent" : "text-lpu-primary"
                 : "text-gray-400"

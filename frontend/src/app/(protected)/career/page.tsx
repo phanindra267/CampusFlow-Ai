@@ -194,8 +194,8 @@ export default function CareerPage() {
           <div>
             <h2 className="font-semibold text-gray-900">Prepare with the AI assistant</h2>
             <p className="text-sm text-gray-600 mt-1">
-              The assistant runs on your device or a local Ollama server, so your preparation notes stay
-              private. Pick a starting point:
+              The assistant runs entirely on your device using WebLLM on WebGPU, so your preparation
+              notes are never sent to an external model provider. Pick a starting point:
             </p>
           </div>
           <div className="space-y-2">

@@ -143,6 +143,8 @@ func TestRoleGuardBlocksInsufficientRole(t *testing.T) {
 	adminOnly := []string{
 		"/api/v1/institutional/analytics",
 		"/api/v1/institutional/graph?query=ai",
+		"/api/v1/admin/users",
+		"/api/v1/admin/approvals/clubs",
 	}
 
 	for _, path := range adminOnly {
@@ -196,6 +198,46 @@ func TestSearchRequiresQueryParameter(t *testing.T) {
 	// assertion rather than a side effect of the missing pool.
 	if w := doRequest(t, srv, http.MethodGet, "/api/v1/community/search", memberToken, ""); w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for a search with no query, got %d", w.Code)
+	}
+}
+
+// The AI retrieval endpoint is part of the protected surface: campus records
+// must not be readable without a session.
+func TestAIContextRequiresAuthentication(t *testing.T) {
+	srv := newTestServer(t)
+
+	if w := doRequest(t, srv, http.MethodGet, "/api/v1/ai/context?q=cloud", "", ""); w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without a token, got %d", w.Code)
+	}
+}
+
+func TestAIContextRequiresQueryParameter(t *testing.T) {
+	srv := newTestServer(t)
+	memberToken := accessToken(t, "MEMBER")
+
+	if w := doRequest(t, srv, http.MethodGet, "/api/v1/ai/context", memberToken, ""); w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 with no query, got %d", w.Code)
+	}
+	if w := doRequest(t, srv, http.MethodGet, "/api/v1/ai/context?q=%20%20", memberToken, ""); w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 with a blank query, got %d", w.Code)
+	}
+}
+
+// Retrieval is a read, not a generation proxy. The route surface must not
+// accept a prompt to forward, because inference runs client-side.
+func TestAIDoesNotExposeGenerationEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+	memberToken := accessToken(t, "MEMBER")
+
+	// A POST to the retrieval route must not exist at all.
+	if w := doRequest(t, srv, http.MethodPost, "/api/v1/ai/context", memberToken, `{"prompt":"hello"}`); w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for POST /ai/context, got %d", w.Code)
+	}
+
+	for _, path := range []string{"/api/v1/ai/chat", "/api/v1/ai/complete", "/api/v1/ai/generate"} {
+		if w := doRequest(t, srv, http.MethodPost, path, memberToken, `{"prompt":"hello"}`); w.Code != http.StatusNotFound {
+			t.Errorf("%s: expected 404, got %d", path, w.Code)
+		}
 	}
 }
 

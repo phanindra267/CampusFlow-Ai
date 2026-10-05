@@ -105,7 +105,10 @@ func Load() (*Config, error) {
 			Format: getEnv("LOG_FORMAT", "json"),
 		},
 		Weaviate: WeaviateConfig{
-			Host:   getEnv("WEAVIATE_HOST", "localhost:8080"),
+			// 8081 is the host port Compose publishes for Weaviate; 8080 is
+			// this API's own port, so defaulting there would make the server
+			// probe itself for a vector index.
+			Host:   getEnv("WEAVIATE_HOST", "localhost:8081"),
 			Scheme: getEnv("WEAVIATE_SCHEME", "http"),
 		},
 	}, nil

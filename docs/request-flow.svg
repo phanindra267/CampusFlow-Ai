@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf4ff"/>
+      <stop offset="100%" stop-color="#eff6ff"/>
+    </linearGradient>
+    <marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#475569"/>
+    </marker>
+    <marker id="a3o" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#ea580c"/>
+    </marker>
+    <style>
+      .step { font-size:11.5px; font-weight:700; fill:#0f172a; }
+      .det { font-size:10px; fill:#64748b; }
+      .ttl { font-size:19px; font-weight:700; fill:#0f172a; }
+      .lane { font-size:11px; font-weight:700; fill:#334155; letter-spacing:0.5px; }
+    </style>
+  </defs>
+
+  <rect width="1000" height="620" fill="url(#bg3)"/>
+  <text x="500" y="34" text-anchor="middle" class="ttl">Request Lifecycle — Authentication, Authorisation &amp; Token Refresh</text>
+  <text x="500" y="54" text-anchor="middle" class="det">Short-lived access token + rotating refresh token, enforced by RequireAuth → RequireRole middleware</text>
+
+  <!-- LANES -->
+  <rect x="40" y="76" width="150" height="490" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="115" y="98" text-anchor="middle" class="lane">BROWSER</text>
+  <rect x="210" y="76" width="290" height="490" rx="10" fill="#ffffff" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="355" y="98" text-anchor="middle" class="lane" fill="#c2410c">MIDDLEWARE CHAIN</text>
+  <rect x="520" y="76" width="200" height="490" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="620" y="98" text-anchor="middle" class="lane">HANDLER</text>
+  <rect x="740" y="76" width="220" height="490" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="850" y="98" text-anchor="middle" class="lane">POSTGRESQL</text>
+
+  <!-- STEP 1 -->
+  <rect x="58" y="116" width="114" height="52" rx="7" fill="#FEF3C7" stroke="#F59E0B"/>
+  <text x="115" y="138" text-anchor="middle" class="step">1 · Login</text>
+  <text x="115" y="154" text-anchor="middle" class="det">POST /auth/login</text>
+  <line x1="172" y1="142" x2="228" y2="142" stroke="#ea580c" stroke-width="1.8" marker-end="url(#a3o)"/>
+
+  <rect x="228" y="116" width="254" height="52" rx="7" fill="#FFF7ED" stroke="#F07C00"/>
+  <text x="355" y="138" text-anchor="middle" class="step">bcrypt verify</text>
+  <text x="355" y="154" text-anchor="middle" class="det">normalise + validate email</text>
+  <line x1="482" y1="142" x2="538" y2="142" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+
+  <rect x="538" y="116" width="164" height="52" rx="7" fill="#EEF2FF" stroke="#6366F1"/>
+  <text x="620" y="138" text-anchor="middle" class="step">LoadUserByEmail</text>
+  <text x="620" y="154" text-anchor="middle" class="det">parameterised SELECT</text>
+  <line x1="702" y1="142" x2="758" y2="142" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+
+  <rect x="758" y="116" width="184" height="52" rx="7" fill="#F1F5F9" stroke="#94A3B8"/>
+  <text x="850" y="138" text-anchor="middle" class="step">users row</text>
+  <text x="850" y="154" text-anchor="middle" class="det">role · password_hash</text>
+
+  <!-- STEP 2 -->
+  <line x1="850" y1="168" x2="850" y2="192" stroke="#475569" stroke-width="1.4" marker-end="url(#a3)"/>
+  <rect x="228" y="192" width="682" height="52" rx="7" fill="#EEF2FF" stroke="#6366F1"/>
+  <text x="569" y="214" text-anchor="middle" class="step">2 · Mint token pair — HS256 JWT (userID, role, issuer, exp) + opaque refresh token</text>
+  <text x="569" y="230" text-anchor="middle" class="det">access TTL 24h (JWT_TTL) · refresh TTL 30d (JWT_REFRESH_TTL)</text>
+
+  <line x1="228" y1="244" x2="115" y2="268" stroke="#475569" stroke-width="1.6" marker-end="url(#a3)"/>
+  <rect x="58" y="268" width="114" height="58" rx="7" fill="#FEF3C7" stroke="#F59E0B"/>
+  <text x="115" y="290" text-anchor="middle" class="step">Store tokens</text>
+  <text x="115" y="305" text-anchor="middle" class="det">localStorage</text>
+  <text x="115" y="319" text-anchor="middle" class="det">cross-tab sync</text>
+
+  <!-- PROTECTED FLOW -->
+  <rect x="40" y="350" width="920" height="190" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-dasharray="5 4"/>
+  <text x="56" y="370" font-size="11" font-weight="700" fill="#334155">PROTECTED REQUEST — every /api/v1 route below the public block</text>
+
+  <rect x="58" y="382" width="114" height="46" rx="7" fill="#FEF3C7" stroke="#F59E0B"/>
+  <text x="115" y="402" text-anchor="middle" class="step">GET /clubs</text>
+  <text x="115" y="417" text-anchor="middle" class="det">+ Bearer token</text>
+  <line x1="172" y1="405" x2="228" y2="405" stroke="#ea580c" stroke-width="1.8" marker-end="url(#a3o)"/>
+
+  <rect x="228" y="382" width="254" height="46" rx="7" fill="#FFF7ED" stroke="#F07C00"/>
+  <text x="355" y="402" text-anchor="middle" class="step">Logger → Recovery → CORS → Audit</text>
+  <text x="355" y="417" text-anchor="middle" class="det">audit logs only mutating verbs</text>
+  <line x1="482" y1="405" x2="538" y2="405" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+
+  <rect x="538" y="382" width="164" height="46" rx="7" fill="#FFF7ED" stroke="#F07C00"/>
+  <text x="620" y="402" text-anchor="middle" class="step">RequireAuth</text>
+  <text x="620" y="417" text-anchor="middle" class="det">401 on bad/missing token</text>
+  <line x1="702" y1="405" x2="758" y2="405" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+
+  <rect x="758" y="382" width="184" height="46" rx="7" fill="#F1F5F9" stroke="#94A3B8"/>
+  <text x="850" y="402" text-anchor="middle" class="step">validate + query</text>
+  <text x="850" y="417" text-anchor="middle" class="det">claims → context</text>
+
+  <line x1="355" y1="428" x2="355" y2="452" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="228" y="452" width="254" height="46" rx="7" fill="#FEF2F2" stroke="#DC2626"/>
+  <text x="355" y="472" text-anchor="middle" class="step">RequireRole?</text>
+  <text x="355" y="487" text-anchor="middle" class="det">403 if role not allowed</text>
+
+  <line x1="538" y1="475" x2="620" y2="475" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="538" y="452" width="164" height="46" rx="7" fill="#EEF2FF" stroke="#6366F1"/>
+  <text x="620" y="472" text-anchor="middle" class="step">Handler</text>
+  <text x="620" y="487" text-anchor="middle" class="det">{success,message,data}</text>
+
+  <!-- 401 REFRESH -->
+  <rect x="40" y="470" width="114" height="66" rx="7" fill="#FEE2E2" stroke="#DC2626"/>
+  <text x="115" y="492" text-anchor="middle" class="step" fill="#991B1B">401 → refresh</text>
+  <text x="115" y="507" text-anchor="middle" class="det">retry once</text>
+  <text x="115" y="521" text-anchor="middle" class="det">in-flight dedupe</text>
+  <text x="115" y="533" text-anchor="middle" class="det">POST /auth/refresh</text>
+
+  <rect x="758" y="510" width="184" height="26" rx="6" fill="#ECFDF5" stroke="#22C55E"/>
+  <text x="850" y="527" text-anchor="middle" font-size="10" font-weight="600" fill="#15803D">refresh token rotated</text>
+
+  <!-- ROLE LADDER -->
+  <rect x="228" y="580" width="682" height="28" rx="7" fill="#0F172A"/>
+  <text x="240" y="599" font-size="10.5" font-weight="700" fill="#FED7AA">ROLES</text>
+  <text x="285" y="599" font-size="10.5" fill="#E2E8F0">MEMBER (71 routes)</text>
+  <text x="410" y="599" font-size="10.5" fill="#E2E8F0">ORGANIZER (25 routes: creator + staff)</text>
+  <text x="640" y="599" font-size="10.5" fill="#E2E8F0">ADMIN / SUPER_ADMIN (12 routes)</text>
+</svg>

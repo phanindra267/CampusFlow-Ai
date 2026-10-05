@@ -1,0 +1,245 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 720" width="1180" height="720" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#eef2ff"/>
+    </linearGradient>
+    <marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .t { font-size:12px; font-weight:700; fill:#0f172a; }
+      .f { font-size:10px; fill:#475569; }
+      .pk { fill:#b45309; font-weight:700; }
+      .fk { fill:#1d4ed8; font-weight:700; }
+      .box { fill:#ffffff; stroke:#cbd5e1; stroke-width:1.4; rx:8; }
+      .lbl { font-size:9.5px; fill:#94a3b8; font-style:italic; }
+    </style>
+  </defs>
+
+  <rect width="1180" height="720" fill="url(#bg2)"/>
+  <text x="590" y="34" text-anchor="middle" font-size="21" font-weight="700" fill="#0f172a">CampusCare AI — Core Domain Model (ER Diagram)</text>
+  <text x="590" y="54" text-anchor="middle" font-size="11.5" fill="#64748b">48 active tables · community &amp; campus-life scope · no grades, marks or attendance-for-grading</text>
+
+  <!-- LEGEND -->
+  <rect x="30" y="70" width="250" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="44" y="90" class="f"><tspan class="pk">PK</tspan> primary key</text>
+  <text x="44" y="106" class="f"><tspan class="fk">FK</tspan> foreign key</text>
+  <text x="120" y="90" class="f">—— relationship</text>
+  <text x="120" y="106" class="lbl">48 of 48 tables shown grouped</text>
+
+  <!-- USERS -->
+  <rect x="30" y="145" width="185" height="152" class="box"/>
+  <rect x="30" y="145" width="185" height="26" rx="8" fill="#F07C00"/>
+  <text x="42" y="163" class="t" fill="#ffffff">users</text>
+  <text x="42" y="185" class="f"><tspan class="pk">PK</tspan> id</text>
+  <text x="42" y="200" class="f">email (unique)</text>
+  <text x="42" y="215" class="f">display_name</text>
+  <text x="42" y="230" class="f">password_hash</text>
+  <text x="42" y="245" class="f">role · status</text>
+  <text x="42" y="260" class="f">identifier · program</text>
+  <text x="42" y="275" class="f">branch · year_of_study</text>
+  <text x="42" y="290" class="f">open_to_opportunities</text>
+
+  <rect x="30" y="315" width="185" height="66" class="box"/>
+  <rect x="30" y="315" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="42" y="332" class="t">user_interests</text>
+  <text x="42" y="352" class="f"><tspan class="fk">FK</tspan> user_id</text>
+  <text x="42" y="366" class="f">interest · created_at</text>
+
+  <rect x="30" y="399" width="185" height="80" class="box"/>
+  <rect x="30" y="399" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="42" y="416" class="t">user_research_intests</text>
+  <text x="42" y="436" class="f"><tspan class="fk">FK</tspan> user_id</text>
+  <text x="42" y="451" class="f">interest</text>
+  <text x="42" y="466" class="f">— drives people matching</text>
+
+  <!-- CLUBS -->
+  <rect x="270" y="145" width="180" height="110" class="box"/>
+  <rect x="270" y="145" width="180" height="26" rx="8" fill="#F07C00"/>
+  <text x="282" y="163" class="t" fill="#ffffff">clubs</text>
+  <text x="282" y="185" class="f"><tspan class="pk">PK</tspan> id</text>
+  <text x="282" y="200" class="f">slug (unique)</text>
+  <text x="282" y="215" class="f"><tspan class="fk">FK</tspan> created_by → users</text>
+  <text x="282" y="230" class="f">category · status</text>
+  <text x="282" y="245" class="f">verification_status</text>
+
+  <rect x="270" y="273" width="180" height="72" class="box"/>
+  <rect x="270" y="273" width="180" height="24" rx="8" fill="#fbbf24"/>
+  <text x="282" y="290" class="t">club_memberships</text>
+  <text x="282" y="310" class="f"><tspan class="fk">FK</tspan> club_id · user_id</text>
+  <text x="282" y="325" class="f">role: MEMBER|ADMIN</text>
+  <text x="282" y="340" class="f">joined_at</text>
+
+  <rect x="270" y="363" width="180" height="62" class="box"/>
+  <rect x="270" y="363" width="180" height="24" rx="8" fill="#fbbf24"/>
+  <text x="282" y="380" class="t">club_follows</text>
+  <text x="282" y="400" class="f"><tspan class="fk">FK</tspan> club_id · user_id</text>
+  <text x="282" y="415" class="f">notification prefs</text>
+
+  <rect x="270" y="443" width="180" height="62" class="box"/>
+  <rect x="270" y="443" width="180" height="24" rx="8" fill="#fbbf24"/>
+  <text x="282" y="460" class="t">club_projects</text>
+  <text x="282" y="480" class="f"><tspan class="fk">FK</tspan> club_id</text>
+  <text x="282" y="495" class="f">title · progress · status</text>
+
+  <rect x="270" y="523" width="180" height="62" class="box"/>
+  <rect x="270" y="523" width="180" height="24" rx="8" fill="#fbbf24"/>
+  <text x="282" y="540" class="t">club_activities</text>
+  <text x="282" y="560" class="f"><tspan class="fk">FK</tspan> club_id</text>
+  <text x="282" y="575" class="f">activity_type · starts_at</text>
+
+  <!-- EVENTS -->
+  <rect x="505" y="145" width="185" height="138" class="box"/>
+  <rect x="505" y="145" width="185" height="26" rx="8" fill="#F07C00"/>
+  <text x="517" y="163" class="t" fill="#ffffff">events</text>
+  <text x="517" y="185" class="f"><tspan class="pk">PK</tspan> id</text>
+  <text x="517" y="200" class="f"><tspan class="fk">FK</tspan> organizer_id</text>
+  <text x="517" y="215" class="f"><tspan class="fk">FK</tspan> club_id (nullable)</text>
+  <text x="517" y="230" class="f">category · status</text>
+  <text x="517" y="245" class="f">start_time · end_time</text>
+  <text x="517" y="260" class="f">registration_deadline</text>
+  <text x="517" y="275" class="f">capacity · venue</text>
+
+  <rect x="505" y="301" width="185" height="72" class="box"/>
+  <rect x="505" y="301" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="517" y="318" class="t">event_registrations</text>
+  <text x="517" y="338" class="f"><tspan class="fk">FK</tspan> event_id · user_id</text>
+  <text x="517" y="353" class="f">status · registered_at</text>
+  <text x="517" y="368" class="f">unique(event_id,user_id)</text>
+
+  <rect x="505" y="391" width="185" height="58" class="box"/>
+  <rect x="505" y="391" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="517" y="408" class="t">waitlist_entries</text>
+  <text x="517" y="428" class="f"><tspan class="fk">FK</tspan> event_id · user_id</text>
+  <text x="517" y="443" class="f">position · status</text>
+
+  <rect x="505" y="467" width="185" height="58" class="box"/>
+  <rect x="505" y="467" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="517" y="484" class="t">attendance_records</text>
+  <text x="517" y="504" class="f"><tspan class="fk">FK</tspan> event_session_id</text>
+  <text x="517" y="519" class="f">checked_in_at · method</text>
+
+  <rect x="505" y="543" width="185" height="58" class="box"/>
+  <rect x="505" y="543" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="517" y="560" class="t">check_in_sessions</text>
+  <text x="517" y="580" class="f"><tspan class="fk">FK</tspan> event_id · organizer_id</text>
+  <text x="517" y="595" class="f">opened_at · closed_at</text>
+
+  <!-- OPPORTUNITIES -->
+  <rect x="745" y="145" width="185" height="138" class="box"/>
+  <rect x="745" y="145" width="185" height="26" rx="8" fill="#F07C00"/>
+  <text x="757" y="163" class="t" fill="#ffffff">opportunities</text>
+  <text x="757" y="185" class="f"><tspan class="pk">PK</tspan> id</text>
+  <text x="757" y="200" class="f"><tspan class="fk">FK</tspan> organizer_id</text>
+  <text x="757" y="215" class="f"><tspan class="fk">FK</tspan> club_id</text>
+  <text x="757" y="230" class="f">type · category · source</text>
+  <text x="757" y="245" class="f">delivery_mode · capacity</text>
+  <text x="757" y="260" class="f">registration_deadline</text>
+  <text x="757" y="275" class="f">status: OPEN|CLOSED</text>
+
+  <rect x="745" y="301" width="185" height="86" class="box"/>
+  <rect x="745" y="301" width="185" height="24" rx="8" fill="#fbbf24"/>
+  <text x="757" y="318" class="t">opportunity_applications</text>
+  <text x="757" y="338" class="f"><tspan class="fk">FK</tspan> opportunity_id</text>
+  <text x="757" y="353" class="f"><tspan class="fk">FK</tspan> user_id</text>
+  <text x="757" y="368" class="f">PENDING|ACCEPTED|REJECTED</text>
+  <text x="757" y="382" class="f">WITHDRAWN (never deleted)</text>
+
+  <!-- SERVICES -->
+  <rect x="985" y="145" width="165" height="100" class="box"/>
+  <rect x="985" y="145" width="165" height="26" rx="8" fill="#F07C00"/>
+  <text x="997" y="163" class="t" fill="#ffffff">campus_resources</text>
+  <text x="997" y="185" class="f"><tspan class="pk">PK</tspan> id</text>
+  <text x="997" y="200" class="f">resource_type</text>
+  <text x="997" y="215" class="f">is_bookable</text>
+  <text x="997" y="230" class="f">location · status</text>
+
+  <rect x="985" y="263" width="165" height="86" class="box"/>
+  <rect x="985" y="263" width="165" height="24" rx="8" fill="#fbbf24"/>
+  <text x="997" y="280" class="t">service_requests</text>
+  <text x="997" y="300" class="f"><tspan class="fk">FK</tspan> resource_id</text>
+  <text x="997" y="315" class="f"><tspan class="fk">FK</tspan> requester_id</text>
+  <text x="997" y="330" class="f">OPEN|IN_PROGRESS|</text>
+  <text x="997" y="344" class="f">RESOLVED|RATING</text>
+
+  <rect x="985" y="367" width="165" height="58" class="box"/>
+  <rect x="985" y="367" width="165" height="24" rx="8" fill="#fbbf24"/>
+  <text x="997" y="384" class="t">resource_bookings</text>
+  <text x="997" y="404" class="f"><tspan class="fk">FK</tspan> resource_id · user_id</text>
+  <text x="997" y="419" class="f">starts_at · ends_at</text>
+
+  <rect x="985" y="443" width="165" height="58" class="box"/>
+  <rect x="985" y="443" width="165" height="24" rx="8" fill="#fbbf24"/>
+  <text x="997" y="460" class="t">service_request_events</text>
+  <text x="997" y="480" class="f"><tspan class="fk">FK</tspan> request_id</text>
+  <text x="997" y="495" class="f">full timeline · SLA</text>
+
+  <!-- COMMUNITY -->
+  <rect x="30" y="520" width="180" height="72" class="box"/>
+  <rect x="30" y="520" width="180" height="24" rx="8" fill="#6366F1"/>
+  <text x="42" y="537" class="t" fill="#ffffff">discussions</text>
+  <text x="42" y="557" class="f"><tspan class="fk">FK</tspan> author_id</text>
+  <text x="42" y="572" class="f"><tspan class="fk">FK</tspan> club_id (nullable)</text>
+  <text x="42" y="587" class="f">category · is_pinned</text>
+
+  <rect x="30" y="610" width="180" height="58" class="box"/>
+  <rect x="30" y="610" width="180" height="24" rx="8" fill="#6366F1"/>
+  <text x="42" y="627" class="t" fill="#ffffff">discussion_replies</text>
+  <text x="42" y="647" class="f"><tspan class="fk">FK</tspan> discussion_id · author_id</text>
+
+  <rect x="505" y="620" width="180" height="58" class="box"/>
+  <rect x="505" y="620" width="180" height="24" rx="8" fill="#6366F1"/>
+  <text x="517" y="637" class="t" fill="#ffffff">notifications</text>
+  <text x="517" y="657" class="f"><tspan class="fk">FK</tspan> user_id</text>
+  <text x="517" y="671" class="f">type · read_at · link</text>
+
+  <rect x="745" y="460" width="180" height="72" class="box"/>
+  <rect x="745" y="460" width="180" height="24" rx="8" fill="#6366F1"/>
+  <text x="757" y="477" class="t" fill="#ffffff">people</text>
+  <text x="757" y="497" class="f"><tspan class="pk">PK</tspan> id</text>
+  <text x="757" y="512" class="f">person_role · school</text>
+  <text x="757" y="527" class="f">research_interests[]</text>
+
+  <rect x="745" y="550" width="180" height="72" class="box"/>
+  <rect x="745" y="550" width="180" height="24" rx="8" fill="#6366F1"/>
+  <text x="757" y="567" class="t" fill="#ffffff">announcements</text>
+  <text x="757" y="587" class="f"><tspan class="fk">FK</tspan> author_id</text>
+  <text x="757" y="602" class="f">status · is_pinned</text>
+  <text x="757" y="617" class="f">published_at · audience</text>
+
+  <!-- RAG / GRAPH -->
+  <rect x="270" y="620" width="180" height="58" class="box"/>
+  <rect x="270" y="620" width="180" height="24" rx="8" fill="#0ea5e9"/>
+  <text x="282" y="637" class="t" fill="#ffffff">knowledge_chunks</text>
+  <text x="282" y="657" class="f"><tspan class="fk">FK</tspan> source_id</text>
+  <text x="282" y="671" class="f">content · vector (Weaviate)</text>
+
+  <rect x="985" y="620" width="165" height="58" class="box"/>
+  <rect x="985" y="620" width="165" height="24" rx="8" fill="#22c55e"/>
+  <text x="997" y="637" class="t" fill="#ffffff">audit_logs</text>
+  <text x="997" y="657" class="f"><tspan class="fk">FK</tspan> user_id (nullable)</text>
+  <text x="997" y="671" class="f">method · path · status</text>
+
+  <!-- RELATIONSHIPS -->
+  <line x1="215" y1="200" x2="270" y2="190" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="260" x2="270" y2="300" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="255" x2="270" y2="390" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="240" x2="505" y2="180" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="265" x2="505" y2="330" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="270" x2="745" y2="350" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="225" x2="985" y2="180" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="285" x2="985" y2="390" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="215" y1="230" x2="745" y2="480" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="450" y1="200" x2="505" y2="220" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="450" y1="255" x2="505" y2="490" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="450" y1="240" x2="745" y2="250" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="690" y1="240" x2="745" y2="330" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="1150" y1="245" x2="1150" y2="263" stroke="#64748b" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="690" y1="270" x2="30" y2="540" stroke="#64748b" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+  <line x1="450" y1="635" x2="1150" y2="240" stroke="#0ea5e9" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#a2)" opacity="0.75"/>
+  <text x="800" y="600" font-size="9.5" fill="#0284c7" font-style="italic">RAG retrieval path: knowledge_sources → knowledge_chunks → vector search</text>
+
+  <!-- FOOTNOTE -->
+  <text x="30" y="703" font-size="10" fill="#64748b">Design intent: only one route hard-deletes (club activity). Everything else archives, cancels or closes so the analytics and timeline features keep their audit trail.</text>
+</svg>

@@ -9,14 +9,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", size = "md", isLoading, children, className, disabled, ...props }, ref) => {
-    const base = "inline-flex items-center justify-center gap-2 font-medium rounded-md transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lpu-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+    const base = "inline-flex items-center justify-center gap-2 font-medium rounded-md transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lpu-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
 
     const variants = {
-      primary:     "bg-lpu-primary text-white hover:bg-lpu-hover active:scale-[0.98] shadow-sm",
+      primary:     "bg-gradient-to-r from-lpu-primary to-lpu-hover text-white hover:saturate-110 active:scale-[0.98] shadow-md shadow-orange-900/10 hover:shadow-lg hover:shadow-orange-900/20",
       secondary:   "bg-surface-base border border-surface-border text-gray-700 hover:bg-surface-raised",
       ghost:       "text-gray-600 hover:bg-surface-raised hover:text-gray-900",
       destructive: "bg-red-500 text-white hover:bg-red-600",
-      ai:          "bg-ai-accent text-white hover:bg-ai-dark",
+      ai:          "bg-gradient-to-r from-ai-accent to-ai-dark text-white hover:saturate-110 shadow-md shadow-indigo-900/10 hover:shadow-lg hover:shadow-indigo-900/20",
     };
 
     const sizes = {

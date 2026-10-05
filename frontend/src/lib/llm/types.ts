@@ -1,4 +1,9 @@
-export type LLMProviderName = "webllm" | "ollama";
+/**
+ * Shared types for the on-device language-model layer.
+ *
+ * WebLLM running on WebGPU is the only generative runtime in this application.
+ * There is no server-side LLM and no third-party hosted model API.
+ */
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -8,7 +13,7 @@ export type ChatMessage = {
 };
 
 export type LoadProgress = {
-  /** 0..1 overall progress, or null when the provider cannot estimate it. */
+  /** 0..1 overall progress, or null when progress cannot be estimated. */
   progress: number | null;
   text: string;
 };
@@ -27,36 +32,55 @@ export type Citation = {
 };
 
 /**
- * LLMProvider is the contract every backend must satisfy. Both the in-browser
- * WebLLM runtime and a local Ollama server implement it, so the rest of the
- * app never needs to know which one is active.
+ * AIUnavailableError signals that generative AI cannot run on this device.
+ *
+ * It is deliberately distinct from LLMError: the rest of CampusCare (routing,
+ * structured queries and hybrid search) keeps working when it is raised.
  */
-export interface LLMProvider {
-  readonly name: LLMProviderName;
-  readonly model: string;
+export class AIUnavailableError extends Error {
+  readonly code: "no-webgpu" | "worker-failed" | "engine-failed";
 
-  /** Load weights and warm the runtime. Safe to call repeatedly. */
-  load(onProgress: (progress: LoadProgress) => void): Promise<void>;
-
-  /** True once the provider can serve completions. */
-  isReady(): boolean;
-
-  /** Stream a completion, yielding incremental text. */
-  stream(
-    messages: ChatMessage[],
-    options?: CompletionOptions,
-  ): AsyncGenerator<string, void, unknown>;
-
-  /** Drop the runtime and release GPU memory. */
-  dispose(): Promise<void>;
-}
-
-export class LLMError extends Error {
-  readonly cause?: unknown;
-
-  constructor(message: string, cause?: unknown) {
+  constructor(message: string, code: AIUnavailableError["code"]) {
     super(message);
-    this.name = "LLMError";
-    this.cause = cause;
+    this.name = "AIUnavailableError";
+    this.code = code;
   }
 }
+
+/**
+ * CapabilityReport summarises what this browser can actually do. It is computed
+ * without loading any model, so it is safe to call during render.
+ */
+export type CapabilityReport = {
+  /** `navigator.gpu` exists. */
+  hasWebGPU: boolean;
+  /** A Web Worker can be created, which is where inference runs. */
+  hasWorkerSupport: boolean;
+  /** Generic engine availability: false when generative AI is impossible. */
+  canGenerate: boolean;
+  /** Member-facing explanation, suitable for display. */
+  reason: string | null;
+};
+
+/**
+ * LLMSettings is the whole configurable surface of the generative layer.
+ * Model selection is data, not code, so swapping models never requires a
+ * rewrite of the application.
+ */
+export type LLMSettings = {
+  /** A `prebuiltAppConfig.model_list` id from @mlc-ai/web-llm. */
+  model: string;
+  contextWindowSize: number;
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+};
+
+/**
+ * CompletionRequest is the payload handed to the worker for one generation.
+ */
+export type CompletionRequest = {
+  requestId: string;
+  messages: ChatMessage[];
+  options?: CompletionOptions;
+};

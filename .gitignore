@@ -3,6 +3,7 @@
 !.env.example
 
 bin/
+.bin/
 *.exe
 
 frontend/node_modules/

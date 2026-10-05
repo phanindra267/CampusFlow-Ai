@@ -1,13 +1,70 @@
 package server
 
 import (
+	"context"
+	"log"
+	"time"
+
 	"github.com/campuscare/api/internal/config"
 	"github.com/campuscare/api/internal/delivery/http/handler"
 	"github.com/campuscare/api/internal/delivery/http/middleware"
 	"github.com/campuscare/api/internal/repository/postgres"
+	"github.com/campuscare/api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate/graphql"
 )
+
+// newWeaviateClient dials the vector store once at start-up. A failure is
+// logged and returned as nil rather than fatal: the semantic arm is an
+// enhancement, and CampusCare must stay fully usable with BM25-only search.
+func newWeaviateClient(cfg *config.Config) *weaviate.Client {
+	host := cfg.Weaviate.Host
+	if host == "" {
+		return nil
+	}
+
+	client, err := weaviate.NewClient(weaviate.Config{
+		Host:    host,
+		Scheme:  cfg.Weaviate.Scheme,
+		Timeout: 5 * time.Second,
+		Headers: map[string]string{},
+	})
+
+	if err != nil {
+		log.Printf("Weaviate unavailable at %s (%v). Semantic search disabled; BM25 hybrid search remains active.", host, err)
+		return nil
+	}
+
+	// Confirm the store answers and actually holds the retrieval class. The two
+	// failures are reported separately: an unreachable store is an outage,
+	// whereas a reachable store with no chunks simply means nothing has been
+	// indexed yet.
+	probe, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := client.GraphQL().Get().
+		WithClassName(service.DocumentChunkClass).
+		WithFields(graphql.Field{Name: "source"}).
+		WithLimit(1).
+		Do(probe)
+	if err != nil {
+		log.Printf("Weaviate reachable at %s but not responding (%v). Semantic search disabled; BM25 lexical search remains active.", host, err)
+		return nil
+	}
+
+	if len(result.Errors) > 0 || len(result.Data) == 0 {
+		log.Printf(
+			"Weaviate is running at %s but the %s class is not indexed. "+
+				"Semantic search is inactive; BM25 lexical search remains active.",
+			host, service.DocumentChunkClass,
+		)
+		return nil
+	}
+
+	return client
+}
 
 // Roles recognised by the authorisation middleware. There is no FACULTY role
 // because CampusCare AI is a community platform rather than an academic one.
@@ -28,8 +85,10 @@ type handlers struct {
 	content   *handler.ContentHandler
 	service   *handler.ServiceHandler
 	people    *handler.PeopleHandler
+	admin     *handler.AdminHandler
 
 	institutional *handler.InstitutionalHandler
+	ai            *handler.AIHandler
 }
 
 func newHandlers(cfg *config.Config, db *pgxpool.Pool, userRepo *postgres.UserRepository) *handlers {
@@ -58,10 +117,17 @@ func newHandlers(cfg *config.Config, db *pgxpool.Pool, userRepo *postgres.UserRe
 		),
 		service: handler.NewServiceHandler(postgres.NewServiceRepository(db), notifications),
 		people:  handler.NewPeopleHandler(postgres.NewPeopleRepository(db)),
+		admin:   handler.NewAdminHandler(userRepo, postgres.NewClubRepository(db)),
 
 		institutional: handler.NewInstitutionalHandler(
 			postgres.NewAnalyticsRepository(db),
 			postgres.NewGraphRepository(db),
+		),
+
+		// Retrieval for the assistant. The Weaviate client is optional: without
+		// it the semantic arm is skipped and hybrid search runs BM25 only.
+		ai: handler.NewAIHandler(
+			service.NewRAGService(newWeaviateClient(cfg), service.NewCorpusSource(db)),
 		),
 	}
 }
@@ -97,6 +163,7 @@ func registerRoutes(router *gin.Engine, cfg *config.Config, h *handlers) {
 	registerContentRoutes(protected, h)
 	registerServiceRoutes(protected, h)
 	registerPeopleRoutes(protected, h)
+	registerAIRoutes(protected, h)
 	registerInstitutionalRoutes(protected, h)
 }
 
@@ -253,6 +320,10 @@ func registerContentRoutes(r *gin.RouterGroup, h *handlers) {
 	admin := r.Group("/admin")
 	admin.Use(middleware.RequireRole(adminRoles...))
 	{
+		admin.GET("/users", h.admin.ListUsers)
+		admin.GET("/approvals/clubs", h.admin.ListPendingClubApprovals)
+		admin.PATCH("/approvals/clubs/:id", h.admin.UpdateClubVerification)
+
 		admin.POST("/announcements", h.content.CreateAnnouncement)
 		admin.PATCH("/announcements/:id", h.content.UpdateAnnouncement)
 
@@ -330,6 +401,16 @@ func registerPeopleRoutes(r *gin.RouterGroup, h *handlers) {
 		people.GET("/by-interest", h.people.FindPeopleByInterest)
 		people.GET("/matches", h.people.FindMembersByResearchInterest)
 		people.GET("/:id", h.people.GetPerson)
+	}
+}
+
+// registerAIRoutes exposes retrieval only. The assistant's generative step runs
+// in the browser via WebLLM on WebGPU, so there is deliberately no endpoint
+// that accepts a prompt and proxies it to a model.
+func registerAIRoutes(r *gin.RouterGroup, h *handlers) {
+	ai := r.Group("/ai")
+	{
+		ai.GET("/context", h.ai.Context)
 	}
 }
 

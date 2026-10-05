@@ -184,6 +184,7 @@ export type Club = {
   created_by: string;
   member_count?: number;
   is_member?: boolean;
+  created_at?: string;
 };
 
 export type ClubMembership = {
@@ -305,6 +306,34 @@ export type SearchResult = {
   category: string;
   url: string;
   event_at?: string | null;
+};
+
+/** One grounded campus record returned by hybrid retrieval. */
+export type AIContextRecord = {
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  summary: string;
+  url: string;
+  event_at?: string;
+  /** Which retrieval arm found it: lexical, vector or hybrid. */
+  retrieved_by: string;
+  meta?: Record<string, string>;
+};
+
+/**
+ * AIContext is the assistant's grounding payload. `found: false` means the
+ * campus data does not contain the answer, which must be stated rather than
+ * guessed.
+ */
+export type AIContext = {
+  query: string;
+  context: string;
+  found: boolean;
+  records: AIContextRecord[];
+  lexical_hits: number;
+  vector_hits: number;
+  count: number;
 };
 
 /* ------------------------------------------------------------ endpoints */
@@ -447,5 +476,20 @@ export const api = {
     return fetchAPI<
       ApiEnvelope<{ query: string; total: number; results: SearchResult[]; by_type: Record<string, number> }>
     >(`/community/search?${search.toString()}`);
+  },
+
+  /**
+   * aiContext retrieves grounded campus records for the assistant.
+   *
+   * This is a retrieval endpoint, not a generation proxy: it returns records
+   * and a context block, and the model runs in the browser. `found: false` is a
+   * normal success response meaning nothing matched, which is how the assistant
+   * knows to say the information is unavailable rather than invent it.
+   */
+  aiContext: (q: string, options?: { types?: string[]; limit?: number }) => {
+    const search = new URLSearchParams({ q });
+    if (options?.types?.length) search.set("types", options.types.join(","));
+    if (options?.limit) search.set("limit", String(options.limit));
+    return fetchAPI<ApiEnvelope<AIContext>>(`/ai/context?${search.toString()}`);
   },
 };
