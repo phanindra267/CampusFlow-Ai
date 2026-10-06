@@ -77,7 +77,6 @@ var (
 type handlers struct {
 	auth      *handler.AuthHandler
 	oauth     *handler.OAuthHandler
-	otp       *handler.OTPHandler
 	readiness gin.HandlerFunc
 
 	campus    *handler.CampusHandler
@@ -103,10 +102,9 @@ func newHandlers(cfg *config.Config, db *pgxpool.Pool, userRepo *postgres.UserRe
 	return &handlers{
 		auth:      handler.NewAuthHandler(authCfg, userRepo),
 		oauth:     handler.NewOAuthHandler(authCfg, userRepo),
-		otp:       handler.NewOTPHandler(),
 		readiness: handler.ReadinessCheck(db),
 
-		campus:    handler.NewCampusHandler(postgres.NewCampusRepository(db)),
+		campus:    handler.NewCampusHandler(postgres.NewCampusRepository(db), notifications),
 		community: handler.NewCommunityHandler(postgres.NewCommunityRepository(db)),
 		content: handler.NewContentHandler(
 			postgres.NewEventRepository(db),
@@ -139,13 +137,37 @@ func registerRoutes(router *gin.Engine, cfg *config.Config, h *handlers) {
 	api.GET("/health/ready", h.readiness)
 
 	// ---- Authentication ------------------------------------------------
-	api.POST("/auth/login", h.auth.Login)
-	api.POST("/auth/register", h.auth.Register)
+	//
+	// The credential endpoints are the only unauthenticated surface that lets a
+	// caller choose what the server hashes, so they are the only surface worth
+	// throttling. Everything here is rate limited per client IP.
+	//
+	// login and refresh are the brute-force surface: both take an attacker-supplied
+	// secret and both cost a bcrypt comparison on success or a token signature on
+	// failure, so they get the strict budget.
+	strict := api.Group("/", middleware.RateLimit(
+		middleware.NewRateLimiter(middleware.RateLimitConfig{
+			PerMinute: cfg.RateLimit.AuthPerMinute,
+			Burst:     cfg.RateLimit.AuthBurst,
+		}), middleware.KeyByClientIP))
+
+	strict.POST("/auth/login", h.auth.Login)
 	// Refresh carries the refresh token in the body, so it is reachable without
 	// a valid (already expired) access token.
-	api.POST("/auth/refresh", h.auth.Refresh)
-	api.POST("/auth/otp/request", h.otp.RequestOTP)
-	api.POST("/auth/otp/verify", h.otp.VerifyOTP)
+	strict.POST("/auth/refresh", h.auth.Refresh)
+
+	// register creates an account and is therefore a mass-account surface, but it
+	// does not take a guessable secret, so it gets a looser budget than login.
+	// Without this, one person registering legitimately from a shared campus NAT
+	// could exhaust the login budget for everyone behind the same address.
+	relaxed := api.Group("/", middleware.RateLimit(
+		middleware.NewRateLimiter(middleware.RateLimitConfig{
+			PerMinute: max(cfg.RateLimit.AuthPerMinute*3, 1),
+			Burst:     max(cfg.RateLimit.AuthBurst*3, 1),
+		}), middleware.KeyByClientIP))
+
+	relaxed.POST("/auth/register", h.auth.Register)
+
 	api.GET("/auth/google", h.oauth.GoogleLogin)
 	api.GET("/auth/google/callback", h.oauth.GoogleCallback)
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,7 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 
 type AdminEnvelope<T> = { data: T };
 
-function AdminOnly({ children }: { children: React.ReactNode }) {
+function AdminOnly({ children }: { children: ReactNode }) {
   const { user, isReady } = useAuth();
   const router = useRouter();
 

@@ -26,11 +26,12 @@ func Logger(l *logger.Logger) gin.HandlerFunc {
 		}
 
 		l.WithFields(logrus.Fields{
-			"status":  statusCode,
-			"latency": latency,
-			"ip":      clientIP,
-			"method":  method,
-			"path":    path,
+			"status":     statusCode,
+			"latency":    latency,
+			"ip":         clientIP,
+			"method":     method,
+			"path":       path,
+			"request_id": RequestIDOf(c),
 		}).Info("HTTP Request")
 	}
 }

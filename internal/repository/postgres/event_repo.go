@@ -469,6 +469,12 @@ func (r *EventRepository) ListEventsByOrganizer(ctx context.Context, organizerID
 
 // PromoteWaitlist moves the first waiting member into a place when one frees up,
 // so a cancellation is not wasted on an empty seat.
+//
+// Capacity is re-checked here under the same per-event row lock that
+// RegisterForEvent uses. Without it, promoting into an event that is already
+// full (or that filled up between the organiser opening the console and pressing
+// promote) would overbook deterministically rather than by race. The count runs
+// as a separate statement after the lock so it reads a fresh snapshot.
 func (r *EventRepository) PromoteWaitlist(ctx context.Context, eventID string) (*domain.EventRegistration, error) {
 	if err := r.ready(); err != nil {
 		return nil, err
@@ -479,37 +485,47 @@ func (r *EventRepository) PromoteWaitlist(ctx context.Context, eventID string) (
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	const pick = `SELECT id, member_id FROM waitlist_entries
-		WHERE event_id = $1 AND status = 'WAITING'
-		ORDER BY joined_at ASC LIMIT 1`
+	// Same lock as the direct registration path, so promotion and registration
+	// cannot interleave and jointly overshoot capacity.
+	const lock = `SELECT capacity, status FROM events WHERE id = $1 FOR UPDATE`
 
-	var entryID, memberID string
-	if err := tx.QueryRow(ctx, pick, eventID).Scan(&entryID, &memberID); err != nil {
+	var capacity int
+	var status string
+	if err := tx.QueryRow(ctx, lock, eventID).Scan(&capacity, &status); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("pick waitlist entry: %w", err)
+		return nil, fmt.Errorf("lock event: %w", err)
 	}
 
-	const insert = `INSERT INTO event_registrations (event_id, member_id, status)
-		VALUES ($1, $2, 'REGISTERED')
-		ON CONFLICT (event_id, member_id) DO UPDATE SET status = 'REGISTERED'
-		RETURNING id, event_id, member_id, status, created_at`
-
-	var reg domain.EventRegistration
-	if err := tx.QueryRow(ctx, insert, eventID, memberID).
-		Scan(&reg.ID, &reg.EventID, &reg.MemberID, &reg.Status, &reg.CreatedAt); err != nil {
-		return nil, fmt.Errorf("promote registration: %w", err)
+	if capacity > 0 {
+		var taken int
+		const count = `SELECT count(*) FROM event_registrations
+			WHERE event_id = $1 AND status = 'REGISTERED'`
+		if err := tx.QueryRow(ctx, count, eventID).Scan(&taken); err != nil {
+			return nil, fmt.Errorf("count registrations: %w", err)
+		}
+		if taken >= capacity {
+			return nil, ErrEventFull
+		}
 	}
 
-	if _, err := tx.Exec(ctx,
-		`UPDATE waitlist_entries SET status = 'PROMOTED', promoted_at = now()
-		WHERE id = $1`, entryID); err != nil {
-		return nil, fmt.Errorf("mark waitlist entry: %w", err)
+	// The promotion itself is shared with CancelRegistration, so the organiser
+	// pressing "promote" and a member freeing their own seat take exactly the
+	// same path and cannot drift apart.
+	reg, err := promoteNextFromWaitlist(ctx, tx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if reg == nil {
+		// An organiser pressing this on an empty waitlist needs to know nothing
+		// happened, which is different from the cancellation case where an empty
+		// waitlist is a perfectly good outcome.
+		return nil, ErrNotFound
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit promote: %w", err)
 	}
-	return &reg, nil
+	return reg, nil
 }

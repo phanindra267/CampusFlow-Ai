@@ -265,37 +265,13 @@ func (r *CommunityRepository) MarkAllNotificationsRead(ctx context.Context, user
 	return tag.RowsAffected(), nil
 }
 
-// ApplyToOpportunity records an application, treating a repeat submission as a
-// conflict rather than an error so a double-clicked button is harmless.
-func (r *CommunityRepository) ApplyToOpportunity(ctx context.Context, app *domain.OpportunityApplication) error {
-	if err := r.ready(); err != nil {
-		return err
-	}
-	const query = `INSERT INTO opportunity_applications (opportunity_id, user_id, cover_note, resume_url)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, status, applied_at, updated_at`
-
-	err := r.db.QueryRow(ctx, query, app.OpportunityID, app.UserID, app.CoverNote, app.ResumeURL).
-		Scan(&app.ID, &app.Status, &app.AppliedAt, &app.UpdatedAt)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return ErrDuplicateKey
-		}
-		if isForeignKeyViolation(err) {
-			return ErrInvalidReference
-		}
-		return fmt.Errorf("apply to opportunity: %w", err)
-	}
-
-	// Keep the listing's counter in step with the applications table.
-	if _, err := r.db.Exec(ctx,
-		`UPDATE opportunities SET application_count = (
-			SELECT count(*) FROM opportunity_applications WHERE opportunity_id = $1
-		) WHERE id = $1`, app.OpportunityID); err != nil {
-		return fmt.Errorf("update application count: %w", err)
-	}
-	return nil
-}
+// Applying to an opportunity and withdrawing from one both live in
+// OpportunityRepository, not here. They used to be duplicated in this file, and
+// the copy disagreed with the live one about what application_count means: it
+// counted withdrawn applications while the real path excluded them, so the two
+// implementations drove the same denormalised counter in opposite directions.
+// Nothing called these, which is the only reason the drift never showed up.
+// There is now one implementation of the rule rather than two that can diverge.
 
 func (r *CommunityRepository) ListMyApplications(ctx context.Context, userID string, limit, offset int) ([]domain.OpportunityApplication, error) {
 	if err := r.ready(); err != nil {
@@ -328,29 +304,8 @@ func (r *CommunityRepository) ListMyApplications(ctx context.Context, userID str
 	return out, rows.Err()
 }
 
-func (r *CommunityRepository) WithdrawApplication(ctx context.Context, userID, opportunityID string) error {
-	if err := r.ready(); err != nil {
-		return err
-	}
-	tag, err := r.db.Exec(ctx,
-		`UPDATE opportunity_applications SET status = 'WITHDRAWN', updated_at = now()
-		WHERE user_id = $1 AND opportunity_id = $2 AND status NOT IN ('WITHDRAWN', 'REJECTED')`,
-		userID, opportunityID)
-	if err != nil {
-		return fmt.Errorf("withdraw application: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	if _, err := r.db.Exec(ctx,
-		`UPDATE opportunities SET application_count = (
-			SELECT count(*) FROM opportunity_applications
-			WHERE opportunity_id = $1 AND status <> 'WITHDRAWN'
-		) WHERE id = $1`, opportunityID); err != nil {
-		return fmt.Errorf("update application count: %w", err)
-	}
-	return nil
-}
+// WithdrawApplication, like ApplyToOpportunity, lives in OpportunityRepository.
+// See the note above ListMyApplications for why the duplicate was removed.
 
 // ListResources browses campus facilities and services.
 func (r *CommunityRepository) ListResources(ctx context.Context, resourceType, search string, limit, offset int) ([]domain.CampusResource, error) {

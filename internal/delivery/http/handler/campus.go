@@ -17,10 +17,14 @@ import (
 // check-in and feedback.
 type CampusHandler struct {
 	db *postgres.CampusRepository
+	// notifications is only used to tell a member they were promoted off a
+	// waitlist. Best-effort by design: the seat is already theirs, so a failed
+	// notification must not turn a successful cancellation into an error.
+	notifications *postgres.NotificationRepository
 }
 
-func NewCampusHandler(db *postgres.CampusRepository) *CampusHandler {
-	return &CampusHandler{db: db}
+func NewCampusHandler(db *postgres.CampusRepository, notifications *postgres.NotificationRepository) *CampusHandler {
+	return &CampusHandler{db: db, notifications: notifications}
 }
 
 // ----------------------------------------------------------------- clubs
@@ -186,13 +190,33 @@ func (h *CampusHandler) RegisterForEvent(c *gin.Context) {
 	})
 }
 
+// CancelRegistration gives up a place. The repository moves the freed seat to
+// whoever waited longest in the same transaction, so the response reports who
+// received it and that person is told directly.
 func (h *CampusHandler) CancelRegistration(c *gin.Context) {
-	err := h.db.CancelRegistration(c.Request.Context(), c.Param("id"), middleware.UserID(c))
+	promoted, err := h.db.CancelRegistration(c.Request.Context(), c.Param("id"), middleware.UserID(c))
 	if err != nil {
 		writeRepoError(c, err, "REGISTRATION_NOT_FOUND", "REGISTRATION_CANCEL_FAILED")
 		return
 	}
-	response.Success(c, http.StatusOK, "Registration cancelled", nil)
+
+	body := gin.H{"promoted_from_waitlist": promoted != nil}
+	if promoted == nil {
+		response.Success(c, http.StatusOK, "Registration cancelled", body)
+		return
+	}
+
+	body["promoted_member_id"] = promoted.MemberID
+
+	// Best-effort: the seat is already theirs whether or not this notification
+	// lands, so a notification failure must not fail the cancellation the member
+	// just asked for.
+	_ = h.notifications.NotifyUser(c.Request.Context(), promoted.MemberID,
+		domain.NotificationTypeEvent, "A place opened up",
+		"You have been moved off the waitlist into a confirmed place.",
+		"/events/"+c.Param("id"))
+
+	response.Success(c, http.StatusOK, "Registration cancelled", body)
 }
 
 func (h *CampusHandler) ListWaitlist(c *gin.Context) {
@@ -217,7 +241,37 @@ type openCheckInRequest struct {
 // maxCheckInMinutes bounds how long a check-in window stays open.
 const maxCheckInMinutes = 120
 
+// requireSessionOwnership authorises organiser tooling against the specific
+// event, not just the caller's role.
+//
+// The route group already admits any ORGANIZER. That is necessary but not
+// sufficient: without this check one organiser could open a check-in window on
+// another organiser's event and read their attendee list. Administrators pass
+// regardless, matching how content.go treats admin as an override.
+func (h *CampusHandler) requireSessionOwnership(c *gin.Context) bool {
+	if isAdmin(c) {
+		return true
+	}
+
+	owned, err := h.db.SessionOwnedBy(c.Request.Context(), c.Param("id"), middleware.UserID(c))
+	if err != nil {
+		writeRepoError(c, err, "SESSION_NOT_FOUND", "SESSION_LOOKUP_FAILED")
+		return false
+	}
+	if !owned {
+		// 404 rather than 403: confirming the session exists would itself leak
+		// that another organiser is running an event.
+		response.Error(c, http.StatusNotFound, "SESSION_NOT_FOUND", nil)
+		return false
+	}
+	return true
+}
+
 func (h *CampusHandler) OpenCheckIn(c *gin.Context) {
+	if !h.requireSessionOwnership(c) {
+		return
+	}
+
 	var req openCheckInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_REQUEST", err)
@@ -259,9 +313,14 @@ func (h *CampusHandler) CheckIn(c *gin.Context) {
 
 	record, err := h.db.CheckInByToken(c.Request.Context(), req.Token, middleware.UserID(c), "QR")
 	if err != nil {
+		if errors.Is(err, postgres.ErrNotRegistered) {
+			response.Error(c, http.StatusForbidden,
+				"you are not registered for this event", nil)
+			return
+		}
 		if errors.Is(err, postgres.ErrCheckInRejected) {
 			response.Error(c, http.StatusConflict,
-				"check-in rejected: the code is invalid, expired, or already used", err)
+				"check-in rejected: the code is invalid, expired, or already used", nil)
 			return
 		}
 		writeRepoError(c, err, "SESSION_NOT_FOUND", "CHECK_IN_FAILED")
@@ -272,6 +331,10 @@ func (h *CampusHandler) CheckIn(c *gin.Context) {
 }
 
 func (h *CampusHandler) ListAttendance(c *gin.Context) {
+	if !h.requireSessionOwnership(c) {
+		return
+	}
+
 	records, err := h.db.ListEventAttendance(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		writeRepoError(c, err, "SESSION_NOT_FOUND", "ATTENDANCE_FETCH_FAILED")

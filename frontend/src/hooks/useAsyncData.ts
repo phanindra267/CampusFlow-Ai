@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DependencyList,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { APIError } from "@/lib/api";
 
 type AsyncDataState<T> = {
@@ -10,7 +18,7 @@ type AsyncDataState<T> = {
   /** Re-runs the fetcher, clearing the error first. */
   refresh: () => void;
   /** Replaces the loaded data locally, for optimistic updates. */
-  setData: React.Dispatch<React.SetStateAction<T | null>>;
+  setData: Dispatch<SetStateAction<T | null>>;
 };
 
 function describe(err: unknown): string {
@@ -30,7 +38,7 @@ function describe(err: unknown): string {
  */
 export function useAsyncData<T>(
   fetcher: () => Promise<T>,
-  deps: React.DependencyList,
+  deps: DependencyList,
 ): AsyncDataState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);

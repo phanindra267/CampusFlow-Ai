@@ -1,17 +1,24 @@
-version: '3.8'
 services:
   db:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: postgres
-      # Matches DB_PASSWORD in .env.example. An existing volume keeps its own
-      # password, so change this only alongside that volume.
+      # Matches DB_PASSWORD on the api service below and in .env.example. An
+      # existing volume keeps its own password, so change these only alongside
+      # that volume.
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: campuscare
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # The API refuses to start against a database it cannot reach, so the
+    # database has to be accepting connections first.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d campuscare"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   api:
     build: .
@@ -19,10 +26,12 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - APP_ENV=development
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
-      - DB_PASSWORD=postgrespassword
+      # Must equal the db service's POSTGRES_PASSWORD.
+      - DB_PASSWORD=postgres
       - DB_NAME=campuscare
       - DB_SSLMODE=disable
       - JWT_SECRET=dev-secret-change-me-please-32-chars-minimum
@@ -30,9 +39,15 @@ services:
       # reaches Weaviate directly rather than through the published host port.
       - WEAVIATE_HOST=weaviate:8080
       - WEAVIATE_SCHEME=http
+      # HTTP/2 in cleartext, since this container is reached over plain HTTP on
+      # the Compose network. Point TLS_CERT_FILE/TLS_KEY_FILE at a mounted
+      # certificate to serve ALPN-negotiated HTTP/2 instead.
+      - HTTP2_ENABLED=true
     depends_on:
-      - db
-      - weaviate
+      db:
+        condition: service_healthy
+      weaviate:
+        condition: service_started
 
   weaviate:
     image: semitechnologies/weaviate:1.24.1
@@ -46,6 +61,11 @@ services:
       DEFAULT_VECTORIZER_MODULE: 'none'
     volumes:
       - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/v1/.well-known/ready || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
 volumes:
   postgres_data:

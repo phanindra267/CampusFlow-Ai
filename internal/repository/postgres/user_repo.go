@@ -36,6 +36,23 @@ var ErrEventFull = errors.New("event is full")
 // has already been used by that member for the session.
 var ErrCheckInRejected = errors.New("check-in rejected")
 
+// ErrEventNotOpen is returned when an event is not in a state that accepts
+// registrations. This is a distinct condition from ErrEventFull: the client
+// cannot fix it by retrying later in the same way, and the two deserve
+// different status codes.
+var ErrEventNotOpen = errors.New("event is not open for registration")
+
+// ErrNotRegistered is returned when a member attempts to check in to an event
+// session they hold no registration for. The QR poster at the door is not a
+// capability: attendance must only be recordable for a registered attendee.
+var ErrNotRegistered = errors.New("member is not registered for this event")
+
+// ErrNotOrganizer is returned when a caller tries to act on an event or session
+// they do not own. Authorisation by role alone is not enough for organiser
+// tooling, because any ORGANIZER could otherwise open a check-in window on, or
+// read the attendee list of, somebody else's event.
+var ErrNotOrganizer = errors.New("caller does not own this resource")
+
 // ErrNoDatabase is returned when a repository was built without a pool, which
 // happens only in tests that exercise routing and authorisation without a
 // database. Repositories report it instead of dereferencing a nil pool so a

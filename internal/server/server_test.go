@@ -1,6 +1,10 @@
 package server
 
 import (
+	"context"
+	"crypto/tls"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +14,7 @@ import (
 	"github.com/campuscare/api/internal/config"
 	"github.com/campuscare/api/pkg/auth"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -307,5 +312,96 @@ func TestCORSPreflight(t *testing.T) {
 	}
 	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://campuscare.example" {
 		t.Fatalf("preflight: expected the origin to be echoed, got %q", got)
+	}
+}
+
+// serveH2C binds the server's handler to a real loopback port and serves it, so
+// the protocol negotiation can be exercised over an actual connection rather than
+// simulated through httptest. That distinction is the whole point: a test that
+// calls Handler.ServeHTTP directly never touches the h2c sniffer, so it would
+// pass whether or not HTTP/2 was wired in at all.
+func serveH2C(t *testing.T, handler http.Handler) string {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = srv.Serve(listener) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	return "http://" + listener.Addr().String()
+}
+
+// h2cClient dials without TLS, which is what an h2c connection looks like on the
+// wire: the HTTP/2 preface over a plain TCP socket.
+func h2cClient() *http.Client {
+	return &http.Client{
+		Transport: &http2.Transport{
+			AllowHTTP: true,
+			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, network, addr)
+			},
+		},
+		Timeout: 10 * time.Second,
+	}
+}
+
+func TestServerSpeaksH2CWhenHTTP2EnabledWithoutTLS(t *testing.T) {
+	srv := newTestServer(t)
+	base := serveH2C(t, srv.httpServer.Handler)
+
+	resp, err := h2cClient().Get(base + "/api/v1/health/live")
+	if err != nil {
+		t.Fatalf("h2c request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.ProtoMajor != 2 {
+		t.Fatalf("expected the connection to be negotiated as HTTP/2, got %s", resp.Proto)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("health/live over h2c: expected 200, got %d", resp.StatusCode)
+	}
+	// The response must still travel through the whole middleware chain; a
+	// protocol upgrade that bypassed the router would return 404 or an empty
+	// body rather than the health payload.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), `"status":"UP"`) {
+		t.Fatalf("health/live over h2c returned %q, expected the UP payload", body)
+	}
+}
+
+func TestServerFallsBackToHTTP1WhenHTTP2Disabled(t *testing.T) {
+	cfg := testConfig()
+	cfg.Server.HTTP2 = false
+
+	gin.SetMode(gin.TestMode)
+	srv := New(cfg, nil)
+	if srv == nil {
+		t.Fatal("New returned nil")
+	}
+
+	base := serveH2C(t, srv.httpServer.Handler)
+
+	// A default client has no h2c support, so this is the HTTP/1.1 path a
+	// browser would take.
+	resp, err := http.Get(base + "/api/v1/health/live")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.ProtoMajor != 1 {
+		t.Fatalf("with HTTP/2 disabled the server should answer HTTP/1.1, got %s", resp.Proto)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("health/live over HTTP/1.1: expected 200, got %d", resp.StatusCode)
 	}
 }

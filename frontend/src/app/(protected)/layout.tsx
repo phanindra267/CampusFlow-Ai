@@ -2,9 +2,9 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Sidebar, TopBar, MobileNav } from "@/components/layout/Navigation";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+export default function ProtectedLayout({ children }: { children: ReactNode }) {
   const { user, isReady } = useAuth();
   const router = useRouter();
 

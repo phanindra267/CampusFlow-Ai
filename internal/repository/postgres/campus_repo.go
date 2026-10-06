@@ -376,9 +376,20 @@ func (r *CampusRepository) GetEvent(ctx context.Context, id, userID string) (*do
 	return &e, nil
 }
 
-// RegisterForEvent books a place. A full event is refused with a conflict
-// rather than overbooking, and the count and the insert happen together so two
-// simultaneous registrations cannot both take the last place.
+// RegisterForEvent books a place, refusing to overbook.
+//
+// Correctness under concurrency rests on two things:
+//
+//  1. `SELECT ... FOR UPDATE` on the events row. Every registration for an event
+//     serialises on that single row lock, so two simultaneous requests cannot
+//     both pass the capacity check for the last place.
+//  2. The capacity count runs in a *separate statement* from the lock. Under
+//     READ COMMITTED each statement takes a fresh snapshot, so the waiter sees
+//     the winner's committed insert. Folding the count into the locking
+//     statement would read the pre-lock snapshot and reintroduce the race the
+//     lock exists to prevent.
+//
+// A capacity of 0 means unlimited, which is why the guard tests capacity > 0.
 func (r *CampusRepository) RegisterForEvent(ctx context.Context, eventID, userID string) (*domain.EventRegistration, bool, error) {
 	if err := r.ready(); err != nil {
 		return nil, false, err
@@ -389,25 +400,32 @@ func (r *CampusRepository) RegisterForEvent(ctx context.Context, eventID, userID
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	const check = `SELECT e.capacity, e.status,
-			(SELECT count(*) FROM event_registrations
-				WHERE event_id = e.id AND status = 'REGISTERED')
-		FROM events e WHERE e.id = $1`
+	// Statement 1: take the per-event lock and read the immutable booking rules.
+	const lock = `SELECT capacity, status FROM events WHERE id = $1 FOR UPDATE`
 
 	var capacity int
 	var status string
-	var taken int
-	if err := tx.QueryRow(ctx, check, eventID).Scan(&capacity, &status, &taken); err != nil {
+	if err := tx.QueryRow(ctx, lock, eventID).Scan(&capacity, &status); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, ErrNotFound
 		}
-		return nil, false, fmt.Errorf("check capacity: %w", err)
+		return nil, false, fmt.Errorf("lock event: %w", err)
 	}
 	if status != string(domain.EventStatusPublished) {
-		return nil, false, fmt.Errorf("event is not open for registration")
+		return nil, false, ErrEventNotOpen
 	}
-	if capacity > 0 && taken >= capacity {
-		return nil, false, ErrEventFull
+
+	// Statement 2: count committed registrations under a fresh snapshot.
+	if capacity > 0 {
+		var taken int
+		const count = `SELECT count(*) FROM event_registrations
+			WHERE event_id = $1 AND status = 'REGISTERED'`
+		if err := tx.QueryRow(ctx, count, eventID).Scan(&taken); err != nil {
+			return nil, false, fmt.Errorf("count registrations: %w", err)
+		}
+		if taken >= capacity {
+			return nil, false, ErrEventFull
+		}
 	}
 
 	const insert = `INSERT INTO event_registrations (event_id, member_id, status)
@@ -441,20 +459,75 @@ func (r *CampusRepository) RegisterForEvent(ctx context.Context, eventID, userID
 	return &reg, true, nil
 }
 
-func (r *CampusRepository) CancelRegistration(ctx context.Context, eventID, userID string) error {
+// CancelRegistration gives up a place and hands it straight to whoever has waited
+// longest for it.
+//
+// It returns the promoted member's registration, or (nil, nil) when the waitlist
+// was empty. The handler uses that to tell the person who got the seat.
+//
+// Four things have to happen atomically here, which is why this is a transaction
+// rather than the two bare statements it replaces:
+//
+//  1. Take the per-event row lock, the same one RegisterForEvent and
+//     PromoteWaitlist take. Without it a cancellation could interleave with a
+//     registration claiming the freed place and either double-allocate it or
+//     promote someone into a seat that is already gone.
+//  2. Delete the registration.
+//  3. Delete the engagement row that RegisterForEvent wrote. Leaving it behind
+//     keeps a cancelled event in the member's activity feed as though they were
+//     still going, which is the drift this method used to cause.
+//  4. Promote the next waiting member, writing their engagement row in the same
+//     commit so a promoted person never appears in the feed without a
+//     registration behind them.
+func (r *CampusRepository) CancelRegistration(ctx context.Context, eventID, userID string) (*domain.EventRegistration, error) {
 	if err := r.ready(); err != nil {
-		return err
+		return nil, err
 	}
-	tag, err := r.db.Exec(ctx,
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin cancel: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	const lock = `SELECT id FROM events WHERE id = $1 FOR UPDATE`
+
+	var lockedEventID string
+	if err := tx.QueryRow(ctx, lock, eventID).Scan(&lockedEventID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("lock event: %w", err)
+	}
+
+	// ATTENDED is deliberately excluded: somebody who actually turned up at the
+	// event is a fact about the past, not a booking that can be withdrawn.
+	tag, err := tx.Exec(ctx,
 		`DELETE FROM event_registrations
 		WHERE event_id = $1 AND member_id = $2 AND status <> 'ATTENDED'`, eventID, userID)
 	if err != nil {
-		return fmt.Errorf("cancel registration: %w", err)
+		return nil, fmt.Errorf("cancel registration: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return nil, ErrNotFound
 	}
-	return nil
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM engagement_activities
+		WHERE member_id = $1 AND activity_type = 'EVENT'
+			AND event_type = 'REGISTERED_EVENT'
+			AND activity_id = $2`, userID, eventID); err != nil {
+		return nil, fmt.Errorf("clear cancelled registration engagement: %w", err)
+	}
+
+	promoted, err := promoteNextFromWaitlist(ctx, tx, eventID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit cancel: %w", err)
+	}
+	return promoted, nil
 }
 
 // JoinWaitlist places a member on a full event's waitlist and reports their
@@ -549,29 +622,88 @@ func (r *CampusRepository) OpenCheckIn(ctx context.Context, s *domain.CheckInSes
 	return nil
 }
 
-// CheckInByToken records attendance against an open window. A token that is
-// unknown or expired is rejected, and a member is only ever recorded once per
-// session because attendance_records is keyed on the pair.
+// SessionOwnedBy reports whether organizerID organises the event that
+// eventSessionID belongs to.
+//
+// Organiser tooling is gated by role alone at the route, which is not enough:
+// without this, any member holding the ORGANIZER role could open a check-in
+// window on, or read the attendee list of, an event that belongs to a different
+// organiser. The check is one indexed join on the session's primary key.
+func (r *CampusRepository) SessionOwnedBy(ctx context.Context, eventSessionID, organizerID string) (bool, error) {
+	if err := r.ready(); err != nil {
+		return false, err
+	}
+	const query = `SELECT EXISTS (
+			SELECT 1
+			FROM event_sessions es
+			JOIN events e ON e.id = es.event_id
+			WHERE es.id = $1 AND e.organizer_id = $2
+		)`
+
+	var owned bool
+	if err := r.db.QueryRow(ctx, query, eventSessionID, organizerID).Scan(&owned); err != nil {
+		return false, fmt.Errorf("check session ownership: %w", err)
+	}
+	return owned, nil
+}
+
+// CheckInByToken records attendance against an open window.
+//
+// Three conditions must hold, and all three are enforced here rather than
+// trusted from the caller:
+//
+//  1. The QR token names a check-in window that has not expired.
+//  2. The member holds a live registration for the event that window belongs
+//     to. The poster at the door is a location, not a capability: without this
+//     join any authenticated member could photograph it and mark themselves
+//     present at an event they never registered for, inflating the attendance
+//     figures organiser analytics report.
+//  3. Attendance is recorded at most once per member per session, which the
+//     unique key on (event_session_id, member_id) enforces.
+//
+// When the insert produces no row the reason is probed, so the caller can tell
+// "that code is not valid" apart from "you are not on the list".
 func (r *CampusRepository) CheckInByToken(ctx context.Context, token, userID, method string) (*domain.AttendanceRecord, error) {
 	if err := r.ready(); err != nil {
 		return nil, err
 	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin check in: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// The attendance row and the engagement row are written in one transaction.
+	// They used to be two separate statements, which meant an engagement failure
+	// could leave a member marked present with no record of it in their activity
+	// feed, and the error returned claimed the whole check-in had failed when it
+	// had in fact succeeded.
 	const query = `WITH window AS (
-			SELECT id FROM check_in_sessions
-			WHERE qr_token = $1 AND expires_at > now()
+			SELECT s.event_session_id, es.event_id
+			FROM check_in_sessions s
+			JOIN event_sessions es ON es.id = s.event_session_id
+			WHERE s.qr_token = $1 AND s.expires_at > now()
+		), eligible AS (
+			SELECT w.event_session_id
+			FROM window w
+			WHERE EXISTS (
+				SELECT 1 FROM event_registrations er
+				WHERE er.event_id = w.event_id
+					AND er.member_id = $2
+					AND er.status IN ('REGISTERED', 'ATTENDED')
+			)
 		)
-	INSERT INTO attendance_records (event_session_id, member_id, check_in_method, status)
-	SELECT w.id, $2, $3, 'PRESENT' FROM window w
-	ON CONFLICT (event_session_id, member_id) DO NOTHING
-	RETURNING id, event_session_id, member_id, check_in_method, checked_in_at, status`
+		INSERT INTO attendance_records (event_session_id, member_id, check_in_method, status)
+		SELECT e.event_session_id, $2, $3, 'PRESENT' FROM eligible e
+		ON CONFLICT (event_session_id, member_id) DO NOTHING
+		RETURNING id, event_session_id, member_id, check_in_method, checked_in_at, status`
 
 	var rec domain.AttendanceRecord
-	err := r.db.QueryRow(ctx, query, token, userID, method).
+	err = tx.QueryRow(ctx, query, token, userID, method).
 		Scan(&rec.ID, &rec.EventSessionID, &rec.MemberID, &rec.CheckInMethod, &rec.CheckedInAt, &rec.Status)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// The window is closed or expired, or this member already checked in.
-			return nil, ErrCheckInRejected
+			return nil, r.explainCheckInRejection(ctx, token, userID)
 		}
 		if isForeignKeyViolation(err) {
 			return nil, ErrInvalidReference
@@ -579,12 +711,45 @@ func (r *CampusRepository) CheckInByToken(ctx context.Context, token, userID, me
 		return nil, fmt.Errorf("check in: %w", err)
 	}
 
-	if _, err := r.db.Exec(ctx,
+	if _, err := tx.Exec(ctx,
 		`INSERT INTO engagement_activities (member_id, activity_type, activity_id, event_type)
 		VALUES ($1, 'EVENT', $2, 'ATTENDED_EVENT')`, userID, rec.EventSessionID); err != nil {
 		return nil, fmt.Errorf("record engagement: %w", err)
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit check in: %w", err)
+	}
 	return &rec, nil
+}
+
+// explainCheckInRejection distinguishes the reasons an insert above returned no
+// row. ErrNotRegistered is the security-relevant one; the rest all mean the same
+// thing to the member standing at the door, who is holding an invalid code,
+// scanning too early or scanning twice.
+func (r *CampusRepository) explainCheckInRejection(ctx context.Context, token, userID string) error {
+	const probe = `SELECT EXISTS (
+			SELECT 1
+			FROM check_in_sessions s
+			JOIN event_sessions es ON es.id = s.event_session_id
+			JOIN event_registrations er
+				ON er.event_id = es.event_id AND er.member_id = $2
+			WHERE s.qr_token = $1
+				AND s.expires_at > now()
+				AND er.status IN ('REGISTERED', 'ATTENDED')
+		)`
+
+	var registered bool
+	if err := r.db.QueryRow(ctx, probe, token, userID).Scan(&registered); err != nil {
+		// The probe is diagnostic only. If it fails there is still nothing to
+		// record, so the caller gets the generic rejection rather than an error
+		// that implies the check-in might have succeeded.
+		return ErrCheckInRejected
+	}
+	if !registered {
+		return ErrNotRegistered
+	}
+	return ErrCheckInRejected
 }
 
 func (r *CampusRepository) ListEventAttendance(ctx context.Context, sessionID string) ([]domain.AttendanceRecord, error) {

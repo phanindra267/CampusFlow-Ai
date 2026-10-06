@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
   useSyncExternalStore,
+  type ReactNode,
 } from "react";
 import {
   APIError,
@@ -139,7 +140,7 @@ function toUser(account: LoginPayload["user"]): User {
   };
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const user = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const isReady = useSyncExternalStore(
     subscribeToHydration,
