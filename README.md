@@ -428,19 +428,19 @@ curl http://localhost:8080/api/v1/health/live
 curl http://localhost:8080/api/v1/health/ready
 ```
 
-### Demo Accounts
+### Demo / Login Credentials
 
-The seed creates three accounts. **All share the password `ChangeMe123!`** and are inserted
-idempotently, so re-running the seed changes nothing.
+**Login URL:** http://localhost:3000/login
 
-| Email | Role | Sees |
-| --- | --- | --- |
-| `admin@campuscare.test` | `ADMIN` | Everything, including all four admin consoles |
-| `organiser@campuscare.test` | `ORGANIZER` | Creator and organiser routes |
-| `student@campuscare.test` | `MEMBER` | The member experience only |
+The seed creates three accounts. **All share the password ChangeMe123!** and are inserted idempotently.
 
-> Change or remove these before exposing a deployment anywhere. The password is deliberately
-> obvious so nobody ships it by accident.
+| Email | Password | Role | Access |
+| --- | --- | --- | --- |
+| dmin@campuscare.test | ChangeMe123! | ADMIN | Full admin console access |
+| organiser@campuscare.test | ChangeMe123! | ORGANIZER | Event/org management |
+| student@campuscare.test | ChangeMe123! | MEMBER | Student/member experience |
+
+> Change or remove these before exposing a deployment anywhere.
 
 ### One-Command Start (Windows)
 
