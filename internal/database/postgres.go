@@ -14,10 +14,24 @@ func NewPostgresPool(cfg config.DatabaseConfig) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	poolConfig.MaxConns = 10
-	poolConfig.MinConns = 2
-	poolConfig.MaxConnLifetime = time.Hour
-	poolConfig.MaxConnIdleTime = 30 * time.Minute
+	if cfg.MaxConns > 0 {
+		poolConfig.MaxConns = int32(cfg.MaxConns)
+	}
+	if cfg.MinConns > 0 {
+		poolConfig.MinConns = int32(cfg.MinConns)
+	}
+	if cfg.MaxConnLifetime > 0 {
+		poolConfig.MaxConnLifetime = cfg.MaxConnLifetime
+	}
+	if cfg.MaxConnIdleTime > 0 {
+		poolConfig.MaxConnIdleTime = cfg.MaxConnIdleTime
+	}
+	if cfg.HealthCheckPeriod > 0 {
+		poolConfig.HealthCheckPeriod = cfg.HealthCheckPeriod
+	}
+	if cfg.ConnectTimeout > 0 {
+		poolConfig.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

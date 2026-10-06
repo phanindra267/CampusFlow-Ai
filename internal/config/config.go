@@ -63,12 +63,18 @@ type RateLimitConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
+	Host             string
+	Port             string
+	User             string
+	Password         string
+	Name             string
+	SSLMode          string
+	MaxConns         int
+	MinConns         int
+	MaxConnLifetime  time.Duration
+	MaxConnIdleTime  time.Duration
+	HealthCheckPeriod time.Duration
+	ConnectTimeout   time.Duration
 }
 
 type JWTConfig struct {
@@ -152,12 +158,18 @@ func Load() (*Config, error) {
 		Env:    env,
 		Server: server,
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
-			Name:     getEnv("DB_NAME", "campuscare"),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
+			Host:             getEnv("DB_HOST", "localhost"),
+			Port:             getEnv("DB_PORT", "5432"),
+			User:             getEnv("DB_USER", "postgres"),
+			Password:         getEnv("DB_PASSWORD", "postgres"),
+			Name:             getEnv("DB_NAME", "campuscare"),
+			SSLMode:          getEnv("DB_SSLMODE", "disable"),
+			MaxConns:         getEnvInt("DB_MAX_CONNS", 20),
+			MinConns:         getEnvInt("DB_MIN_CONNS", 2),
+			MaxConnLifetime:  getEnvDuration("DB_MAX_CONN_LIFETIME", time.Hour),
+			MaxConnIdleTime:  getEnvDuration("DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+			HealthCheckPeriod: getEnvDuration("DB_HEALTHCHECK_PERIOD", time.Minute),
+			ConnectTimeout:   getEnvDuration("DB_CONNECT_TIMEOUT", 5*time.Second),
 		},
 		JWT: JWTConfig{
 			Secret:     jwtSecret,
