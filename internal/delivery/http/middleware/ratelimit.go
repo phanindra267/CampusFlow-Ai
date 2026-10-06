@@ -119,12 +119,12 @@ func (rl *RateLimiter) Allow(key string) (bool, time.Duration) {
 		// asked for more tokens than the bucket can ever hold.
 		return false, rl.burstInterval()
 	}
-	if delay := reservation.DelayFrom(now); delay > 0 {
-		// Give the token back: a rejected request must not also spend a token,
-		// otherwise a client that retries quickly keeps itself locked out.
-		reservation.CancelAt(now)
-		return false, delay
-	}
+		if delay := reservation.DelayFrom(now); delay > 0 {
+			// Give the token back: a rejected request must not also spend a token,
+			// otherwise a client that retries quickly keeps itself locked out.
+			reservation.CancelAt(now)
+			return false, delay
+		}
 
 	return true, 0
 }

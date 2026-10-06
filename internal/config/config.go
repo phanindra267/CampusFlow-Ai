@@ -16,8 +16,9 @@ type Config struct {
 	Database  DatabaseConfig
 	JWT       JWTConfig
 	Log       LogConfig
-	Weaviate  WeaviateConfig
+	Weaviate WeaviateConfig
 	RateLimit RateLimitConfig
+	Redis     RedisConfig
 }
 
 type ServerConfig struct {
@@ -60,6 +61,12 @@ type RateLimitConfig struct {
 	AuthPerMinute int
 	// AuthBurst is how many authentication requests may arrive at once.
 	AuthBurst int
+	// Store defines where rate limits are persisted: "memory" or "redis".
+	Store string
+	// RedisKeyPrefix is the namespace for redis keys.
+	RedisKeyPrefix string
+	// TrustedProxies is a list of trusted proxy CIDRs (or IPs).
+	TrustedProxies []string
 }
 
 type DatabaseConfig struct {
@@ -194,8 +201,23 @@ func Load() (*Config, error) {
 			// saturate the CPU. Ten attempts a minute from one address is
 			// generous for a person typing a password and unusable for a
 			// guessing script.
-			AuthPerMinute: getEnvInt("AUTH_RATE_LIMIT_PER_MINUTE", 10),
-			AuthBurst:     getEnvInt("AUTH_RATE_LIMIT_BURST", 5),
+			AuthPerMinute:   getEnvInt("AUTH_RATE_LIMIT_PER_MINUTE", 10),
+			AuthBurst:       getEnvInt("AUTH_RATE_LIMIT_BURST", 5),
+			Store:           getEnv("RATE_LIMIT_STORE", "memory"),
+			RedisKeyPrefix:  getEnv("RATE_LIMIT_REDIS_PREFIX", "campuscare:ratelimit:"),
+			TrustedProxies:  getEnvList("TRUSTED_PROXIES", []string{}),
+		},
+		Redis: RedisConfig{
+			Host:         getEnv("REDIS_HOST", ""),
+			Port:         getEnv("REDIS_PORT", "6379"),
+			Password:     getEnv("REDIS_PASSWORD", ""),
+			DB:           getEnvInt("REDIS_DB", 0),
+			PoolSize:     getEnvInt("REDIS_POOL_SIZE", 10),
+			MinIdleConns: getEnvInt("REDIS_MIN_IDLE_CONNS", 2),
+			DialTimeout:  getEnvDuration("REDIS_DIAL_TIMEOUT", 2*time.Second),
+			ReadTimeout:  getEnvDuration("REDIS_READ_TIMEOUT", 500*time.Millisecond),
+			WriteTimeout: getEnvDuration("REDIS_WRITE_TIMEOUT", 500*time.Millisecond),
+			IdleTimeout:  getEnvDuration("REDIS_IDLE_TIMEOUT", 5*time.Minute),
 		},
 	}, nil
 }
